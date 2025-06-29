@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MasYun Data Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Firefox Scrollbar Styling */
+        html {
+            scrollbar-width: thin;
+            scrollbar-color: #d946ef #0e182d; /* thumb (magenta), track (dark blue) */
+        }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            overflow: hidden; /* Prevent scrollbars on body due to fixed elements */
+        }
+        /* Custom scrollbar for webkit browsers - Magenta/Blue Holographic Theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(14, 24, 45, 0.5); /* Dark blue, semi-transparent base, matching panels */
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(45deg, #d946ef, #3b82f6); /* Magenta to Blue gradient */
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background 0.2s ease-in-out;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(45deg, #f0abfc, #60a5fa); /* Brighter Magenta to Blue gradient on hover */
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none; /* For Webkit browsers */
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+
+        /* --- NEW: PIVOT TABLE REDESIGN (FLAT & PROFESSIONAL) --- */
+        .pivot-table-container table {
+            border-collapse: collapse;
+        }
+        .pivot-table-container th,
+        .pivot-table-container td {
+            transition: background-color 0.15s ease-in-out;
+        }
+        .pivot-row-header-clickable {
+            cursor: pointer;
+        }
+
+        /* --- PIVOT THEME: Vibrant Hologram (Default) --- */
+        .pivot-header-default, .pivot-header-row-desc, .pivot-header-grand-total { border-bottom: 1px solid #4a044e; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+        .pivot-cell-row-header, .pivot-cell-default, .pivot-cell-grand-total, .pivot-cell-subtotal-header, .pivot-cell-subtotal-value { border-right: 1px solid #1f2937; border-bottom: 1px solid #1f2937; }
+        
+        .pivot-header-default { background-color: #37305A; color: #CFFAFE; }
+        .pivot-header-row-desc { background-color: #39165A; color: #F3E8FF; font-weight: 600; }
+        .pivot-header-grand-total { background-color: #4a044e; color: #fbcfe8; font-weight: bold; }
+
+        .pivot-cell-default { background-color: #111827; color: #E5E7EB; }
+        .pivot-cell-row-header { background-color: #1a2035; color: #D1D5DB; font-weight: 500; }
+        .pivot-cell-grand-total { background-color: #39165A; color: #fbcfe8; font-weight: bold; }
+        .pivot-cell-subtotal-header { background-color: #3e013e; color: #FCD34D; font-weight: bold; }
+        .pivot-cell-subtotal-value { background-color: #1F2937; color: #FBBF24; font-weight: 500; }
+
+        .zebra-stripe .pivot-cell-default { background-color: #1e1b2e !important; }
+        .pivot-table-container tbody tr:hover .pivot-cell-default, .pivot-table-container tbody tr:hover .pivot-cell-subtotal-value { background-color: #3a325a !important; }
+        .pivot-table-container tbody tr:hover .pivot-cell-row-header, .pivot-row-header-clickable:hover { background-color: #4a427a !important; }
+
+
+        /* --- PIVOT THEME: Cyberpunk Neon --- */
+        .theme-cyber-header-default, .theme-cyber-header-row-desc, .theme-cyber-header-grand-total { border-bottom: 1px solid #ff00ff; }
+        .theme-cyber-cell-row-header, .theme-cyber-cell-default, .theme-cyber-cell-grand-total, .theme-cyber-cell-subtotal-header, .theme-cyber-cell-subtotal-value { border-right: 1px solid #222; border-bottom: 1px solid #222; }
+        
+        .theme-cyber-header-default { background-color: #111; color: #00ffff; text-shadow: 0 0 3px #00ffff; }
+        .theme-cyber-header-row-desc { background-color: #2a002a; color: #ff00ff; font-weight: 600; text-shadow: 0 0 4px #ff00ff; }
+        .theme-cyber-header-grand-total { background-color: #4d4d00; color: #ffff00; font-weight: bold; text-shadow: 0 0 4px #ffff00; }
+
+        .theme-cyber-cell-default { background-color: #0a0a0a; color: #ccc; }
+        .theme-cyber-cell-row-header { background-color: #1a1a1a; color: #00ffff; font-weight: 500; }
+        .theme-cyber-cell-grand-total { background-color: #333300; color: #ffff00; font-weight: bold; }
+        .theme-cyber-cell-subtotal-header { background-color: #002b2b; color: #00ff00; font-weight: bold; text-shadow: 0 0 3px #00ff00; }
+        .theme-cyber-cell-subtotal-value { background-color: #111; color: #9acd32; font-weight: 500; }
+        
+        .zebra-stripe-cyber .theme-cyber-cell-default { background-color: #141414 !important; }
+        .pivot-table-container tbody tr:hover .theme-cyber-cell-default, .pivot-table-container tbody tr:hover .theme-cyber-cell-subtotal-value { background-color: #333 !important; }
+        .pivot-table-container tbody tr:hover .theme-cyber-cell-row-header, .pivot-row-header-clickable.theme-cyber-cell-row-header:hover { background-color: #2c2c2c !important; }
+
+        /* --- PIVOT THEME: Arctic Dawn (Light Theme) --- */
+        .theme-arctic-header-default, .theme-arctic-header-row-desc, .theme-arctic-header-grand-total { border-bottom: 1px solid #cbd5e1; }
+        .theme-arctic-cell-row-header, .theme-arctic-cell-default, .theme-arctic-cell-grand-total, .theme-arctic-cell-subtotal-header, .theme-arctic-cell-subtotal-value { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+        
+        .theme-arctic-header-default { background-color: #eef2f7; color: #2d3748; }
+        .theme-arctic-header-row-desc { background-color: #e2e8f0; color: #1e293b; font-weight: 600; }
+        .theme-arctic-header-grand-total { background-color: #475569; color: #f1f5f9; font-weight: bold; }
+
+        .theme-arctic-cell-default { background-color: #ffffff; color: #334152; }
+        .theme-arctic-cell-row-header { background-color: #f8fafc; color: #475569; font-weight: 500; }
+        .theme-arctic-cell-grand-total { background-color: #64748b; color: #f1f5f9; font-weight: bold; }
+        .theme-arctic-cell-subtotal-header { background-color: #dbeafe; color: #1e3a8a; font-weight: bold; }
+        .theme-arctic-cell-subtotal-value { background-color: #f0f4f9; color: #1e40af; font-weight: 500; }
+        
+        .zebra-stripe-arctic .theme-arctic-cell-default { background-color: #f8fafc !important; }
+        .pivot-table-container tbody tr:hover .theme-arctic-cell-default, .pivot-table-container tbody tr:hover .theme-arctic-cell-subtotal-value { background-color: #eef2f7 !important; }
+        .pivot-table-container tbody tr:hover .theme-arctic-cell-row-header, .pivot-row-header-clickable.theme-arctic-cell-row-header:hover { background-color: #e2e8f0 !important; }
+
+        /* --- PIVOT THEME: Professional Blue (Dark) --- */
+        .theme-pro-header-default, .theme-pro-header-row-desc, .theme-pro-header-grand-total { border-bottom: 1px solid #4b5563; }
+        .theme-pro-cell-row-header, .theme-pro-cell-default, .theme-pro-cell-grand-total, .theme-pro-cell-subtotal-header, .theme-pro-cell-subtotal-value { border-right: 1px solid #374151; border-bottom: 1px solid #374151; }
+
+        .theme-pro-header-default { background-color: #1f2937; color: #d1d5db; }
+        .theme-pro-header-row-desc { background-color: #111827; color: #9ca3af; font-weight: 600; }
+        .theme-pro-header-grand-total { background-color: #0369a1; color: #e0f2fe; font-weight: bold; }
+
+        .theme-pro-cell-default { background-color: #111827; color: #d1d5db; }
+        .theme-pro-cell-row-header { background-color: #1f2937; color: #9ca3af; font-weight: 500; }
+        .theme-pro-cell-grand-total { background-color: #075985; color: #e0f2fe; font-weight: bold; }
+        .theme-pro-cell-subtotal-header { background-color: #164e63; color: #a5f3fc; font-weight: bold; }
+        .theme-pro-cell-subtotal-value { background-color: #1e293b; color: #bae6fd; font-weight: 500; }
+        
+        .zebra-stripe-pro .theme-pro-cell-default { background-color: #1e293b !important; }
+        .pivot-table-container tbody tr:hover .theme-pro-cell-default, .pivot-table-container tbody tr:hover .theme-pro-cell-subtotal-value { background-color: #334155 !important; }
+        .pivot-table-container tbody tr:hover .theme-pro-cell-row-header, .pivot-row-header-clickable.theme-pro-cell-row-header:hover { background-color: #475569 !important; }
+        
+        /* --- NEW: Data Table Search Highlight --- */
+        tr.search-highlight-row {
+            background-color: rgba(217, 70, 239, 0.15) !important; /* magenta-500 @ 15% */
+        }
+        tr.search-highlight-row td {
+            font-weight: bold !important;
+            color: #f5d0fe !important; /* magenta-100 */
+        }
+        tr.search-highlight-row:hover {
+            background-color: rgba(217, 70, 239, 0.25) !important; /* magenta-500 @ 25% on hover */
+        }
+
+        /* --- Holographic Panel Style --- */
+        .panel-holographic {
+            position: relative;
+            background-color: rgba(14, 24, 45, 0.65); /* Deep blue, semi-transparent base */
+            backdrop-filter: blur(10px); /* Increased blur for more depth */
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(139, 92, 246, 0.3); /* Use a purple that blends blue and magenta */
+            box-shadow: 
+                0 0 25px rgba(59, 130, 246, 0.1), /* Blue glow */
+                0 0 25px rgba(217, 70, 239, 0.1), /* Magenta glow */
+                inset 0 0 15px rgba(34, 197, 94, 0.1); /* Subtle inner green glow */
+            overflow: hidden;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+
+        .panel-holographic::before,
+        .panel-holographic::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            border-radius: 0.5rem;
+        }
+
+        /* Glowing corner effect with new tri-color scheme */
+        .panel-holographic::before {
+            background:
+                radial-gradient(circle at top left, rgba(59, 130, 246, 0.35), transparent 30%),
+                radial-gradient(circle at bottom right, rgba(217, 70, 239, 0.35), transparent 30%),
+                radial-gradient(circle at top right, rgba(34, 197, 94, 0.3), transparent 35%);
+            animation: pulse-glow 8s infinite alternate ease-in-out;
+        }
+
+        /* Scanline effect with new color */
+        .panel-holographic::after {
+            background: linear-gradient(
+                0deg,
+                transparent 49.5%,
+                rgba(34, 197, 94, 0.12) 50%,
+                transparent 50.5%
+            );
+            background-size: 100% 4px;
+            animation: scanline 15s linear infinite;
+        }
+
+        @keyframes pulse-glow {
+            from { opacity: 0.7; filter: brightness(0.9); }
+            to { opacity: 1; filter: brightness(1.2); }
+        }
+
+        @keyframes scanline {
+            from { background-position: 0 0; }
+            to { background-position: 0 -200px; }
+        }
+
+        /* --- NEW: CONDITIONAL FORMATTING STYLES --- */
+        .format-bg-red-glow {
+            background-color: rgba(239, 68, 68, 0.15) !important;
+            box-shadow: inset 0 0 8px rgba(239, 68, 68, 0.4);
+        }
+        .format-bg-green-glow {
+            background-color: rgba(34, 197, 94, 0.15) !important;
+            box-shadow: inset 0 0 8px rgba(34, 197, 94, 0.4);
+        }
+        .format-bg-yellow-glow {
+            background-color: rgba(234, 179, 8, 0.15) !important;
+            box-shadow: inset 0 0 8px rgba(234, 179, 8, 0.4);
+        }
+        .format-bg-blue-glow {
+            background-color: rgba(59, 130, 246, 0.15) !important;
+            box-shadow: inset 0 0 8px rgba(59, 130, 246, 0.4);
+        }
+        .format-bg-purple-glow {
+            background-color: rgba(168, 85, 247, 0.15) !important;
+            box-shadow: inset 0 0 8px rgba(168, 85, 247, 0.4);
+        }
+        .format-text-bold {
+            font-weight: 700 !important;
+            text-shadow: 0 0 3px currentColor;
+        }
+        /* Color scale example */
+        .color-scale-green-1 { background-color: rgba(34, 197, 94, 0.08) !important; }
+        .color-scale-green-2 { background-color: rgba(34, 197, 94, 0.16) !important; }
+        .color-scale-green-3 { background-color: rgba(34, 197, 94, 0.24) !important; }
+        .color-scale-green-4 { background-color: rgba(34, 197, 94, 0.32) !important; }
+        .color-scale-green-5 { background-color: rgba(34, 197, 94, 0.40) !important; }
+
+        /* --- Holographic Dropzone Style --- */
+        .dropzone-holographic {
+            border: 2px dashed rgba(139, 92, 246, 0.4); /* purple-ish, semi-transparent */
+            background-color: rgba(14, 24, 45, 0.2); /* very subtle dark blue base */
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dropzone-holographic:hover {
+            border-color: rgba(59, 130, 246, 0.6); /* blue-ish on hover */
+            background-color: rgba(14, 24, 45, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .dropzone-holographic.active {
+            border-style: solid;
+            border-color: rgba(34, 197, 94, 0.8); /* green when active */
+            background: 
+                radial-gradient(ellipse at center, rgba(34, 197, 94, 0.25) 0%, rgba(14, 24, 45, 0.5) 70%),
+                rgba(14, 24, 45, 0.5);
+            box-shadow: 
+                inset 0 0 40px rgba(34, 197, 94, 0.4), /* inner green glow */
+                0 0 30px rgba(34, 197, 94, 0.3); /* outer green glow */
+            transform: scale(1.02) translateY(-2px);
+        }
+
+        /* Adding a subtle grid pattern to the dropzone */
+        .dropzone-holographic::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px),
+                linear-gradient(to right, rgba(59, 130, 246, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            pointer-events: none;
+        }
+        .dropzone-holographic:hover::after, .dropzone-holographic.active::after {
+            opacity: 1;
+        }
+        
+        /* --- Styles for Chart Fullscreen Modal --- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1100; /* High z-index */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            animation: fadeIn 0.3s forwards;
+        }
+
+        .modal-content-maximized {
+            background-color: rgba(14, 24, 45, 0.9);
+            border: 1px solid rgba(139, 92, 246, 0.5);
+            box-shadow: 0 0 50px rgba(217, 70, 239, 0.2);
+            width: 95vw;
+            height: 95vh;
+            border-radius: 1rem;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transform: scale(0.95);
+            animation: zoomIn 0.3s forwards;
+        }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+        /* --- Style for glowing chart dots --- */
+        @keyframes pulse-dot-glow {
+            0% {
+                filter: drop-shadow(0 0 2px rgba(0, 255, 255, 0.7));
+            }
+            50% {
+                filter: drop-shadow(0 0 6px rgba(0, 255, 255, 1)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.5));
+            }
+            100% {
+                filter: drop-shadow(0 0 2px rgba(0, 255, 255, 0.7));
+            }
+        }
+
+        .recharts-line-dot circle,
+        .recharts-area-dot circle {
+            animation: pulse-dot-glow 2.5s infinite ease-in-out;
+            transition: filter 0.3s ease;
+        }
+
+        /* --- NEW: Styles for Welcome Screen Widgets --- */
+        .welcome-widget-container {
+            perspective: 1500px;
+        }
+
+        .welcome-widget {
+            position: relative;
+            background-color: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+            transform-style: preserve-3d;
+            transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.4s ease;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .welcome-widget:hover {
+            transform: translateY(-12px) scale(1.05) rotateX(8deg);
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+            border-color: rgba(99, 102, 241, 0.6);
+        }
+
+        .welcome-widget::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 0.75rem;
+            background: radial-gradient(80% 80% at 50% 50%, transparent, rgba(139, 92, 246, 0.15));
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+
+        .welcome-widget:hover::before {
+            opacity: 1;
+        }
+
+        .welcome-widget .widget-icon {
+            transition: transform 0.4s ease, filter 0.4s ease;
+        }
+        .welcome-widget:hover .widget-icon {
+            transform: scale(1.1) translateY(-5px);
+            filter: drop-shadow(0 0 10px currentColor);
+        }
+        
+        /* --- NEW: Floating Dock Styles --- */
+        .dock-item {
+          position: relative;
+          width: 64px;
+          height: 64px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bouncy transition */
+          border: 2px solid rgba(255, 255, 255, 0.2);
+          box-shadow: 
+            0 5px 15px rgba(0,0,0,0.3),
+            inset 0 2px 2px rgba(255, 255, 255, 0.2),
+            inset 0 -2px 2px rgba(0,0,0,0.3);
+          -webkit-backdrop-filter: blur(10px);
+          backdrop-filter: blur(10px);
+          cursor: pointer;
+        }
+
+        .dock-item-icon {
+          width: 36px;
+          height: 36px;
+          color: white;
+          filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+          transition: transform 0.2s ease-out;
+        }
+
+        .dock-item:hover .dock-item-icon {
+          transform: scale(1.1);
+        }
+
+        .dock-item.active {
+          box-shadow: 
+            0 0 0 3px rgba(255,255,255,0.8),
+            0 0 20px 5px var(--glow-color, #00D4FF),
+            0 5px 15px rgba(0,0,0,0.3),
+            inset 0 2px 2px rgba(255, 255, 255, 0.2),
+            inset 0 -2px 2px rgba(0,0,0,0.3);
+        }
+
+        /* Color Gradients */
+        .dock-item-blue { 
+          --glow-color: #3b82f6;
+          background: radial-gradient(circle at 30% 30%, #60a5fa, #3b82f6); 
+        }
+        .dock-item-green { 
+          --glow-color: #22c55e;
+          background: radial-gradient(circle at 30% 30%, #4ade80, #22c55e); 
+        }
+        .dock-item-purple { 
+          --glow-color: #a855f7;
+          background: radial-gradient(circle at 30% 30%, #c084fc, #a855f7); 
+        }
+        .dock-item-orange { 
+          --glow-color: #f97316;
+          background: radial-gradient(circle at 30% 30%, #fb923c, #f97316); 
+        }
+        .dock-item-red { 
+          --glow-color: #ef4444;
+          background: radial-gradient(circle at 30% 30%, #f87171, #ef4444); 
+        }
+        .dock-item-indigo { 
+          --glow-color: #6366f1;
+          background: radial-gradient(circle at 30% 30%, #818cf8, #6366f1); 
+        }
+        .dock-item-lime { 
+          --glow-color: #84cc16;
+          background: radial-gradient(circle at 30% 30%, #a3e635, #84cc16); 
+        }
+        .dock-item-cyan { 
+          --glow-color: #22d3ee;
+          background: radial-gradient(circle at 30% 30%, #67e8f9, #22d3ee); 
+        }
+        .dock-item-gray { 
+          --glow-color: #9ca3af;
+          background: radial-gradient(circle at 30% 30%, #e5e7eb, #9ca3af); 
+        }
+
+
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.6.0",
+    "recharts": "https://esm.sh/recharts@^3.0.0",
+    "react-dropzone": "https://esm.sh/react-dropzone@^14.3.8",
+    "three": "https://esm.sh/three@^0.168.0",
+    "three/examples/jsm/controls/OrbitControls.js": "https://esm.sh/three@^0.168.0/examples/jsm/controls/OrbitControls.js",
+    "xlsx": "https://esm.sh/xlsx@^0.18.5",
+    "three/": "https://esm.sh/three@^0.177.0/",
+    "marked": "https://esm.sh/marked@^14.0.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
