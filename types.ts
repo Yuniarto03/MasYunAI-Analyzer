@@ -57,7 +57,8 @@ export type ViewKey =
   | 'statisticalAnalysis'
   | 'workflow'
   | 'about'
-  | 'aiAssistant';
+  | 'aiAssistant'
+  | 'diagrammingMatrix';
 
 export interface NavSubMenuItemConfig {
     name: string;
@@ -260,4 +261,53 @@ export interface Theme {
   accent3: string;
   accent4: string;
   darkBg: string;
+}
+
+// --- NEW TYPES FOR DIAGRAMMING MATRIX ---
+export interface DiagramNodeStyle {
+    backgroundColor: string;
+    borderColor: string;
+    borderWidth: number;
+    color: string;
+    fontSize: number;
+    fontFamily: string;
+    opacity: number;
+    shadow: boolean;
+    backgroundImage: string;
+    icon: string;
+}
+
+export interface DiagramNode {
+    id: string;
+    type: 'rectangle' | 'ellipse' | 'diamond' | 'text';
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+    data: {
+        label: string;
+        style: Partial<DiagramNodeStyle>;
+    };
+}
+
+export interface DiagramEdge {
+    id: string;
+    source: string;
+    target: string;
+    label?: string;
+    style?: {
+        stroke: string;
+        strokeWidth: number;
+        strokeDasharray?: string;
+        arrowHead?: 'arrow' | 'circle' | 'none';
+    };
+}
+
+export interface DiagramState {
+    nodes: DiagramNode[];
+    edges: DiagramEdge[];
+}
+
+export interface DiagramTheme {
+    node: Partial<DiagramNodeStyle>;
+    edge: { stroke: string; labelColor: string };
+    canvas: { backgroundColor: string; gridColor: string };
 }

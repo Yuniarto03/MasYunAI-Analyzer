@@ -43,6 +43,67 @@
             scrollbar-width: none;  /* Firefox */
         }
 
+        /* --- NEW: Sidebar Beautification --- */
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem; /* 12px */
+            padding: 0.625rem 0.75rem; /* 10px 12px */
+            border-radius: 0.375rem; /* 6px */
+            position: relative;
+            overflow: hidden;
+            transition: all 0.25s ease-out;
+            color: #d1d5db; /* gray-300 */
+        }
+        .sidebar-item-icon {
+            width: 1.25rem; /* 20px */
+            height: 1.25rem;
+            flex-shrink: 0;
+            color: #9ca3af; /* gray-400 */
+            transition: all 0.25s ease-out;
+        }
+        .sidebar-item::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 0.375rem;
+            background: radial-gradient(circle at center, rgba(168, 85, 247, 0.25), transparent 80%);
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.3s ease-out;
+        }
+        .sidebar-item:hover::before {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .sidebar-item:hover {
+            background-color: rgba(168, 85, 247, 0.1); /* purple-500/10 */
+            color: #ffffff;
+        }
+        .sidebar-item:hover .sidebar-item-icon {
+            color: #ffffff;
+            transform: scale(1.1);
+        }
+        .sidebar-item-active {
+            background-color: rgba(139, 92, 246, 0.2); /* purple-600/20 */
+            color: #ffffff;
+            font-weight: 600;
+        }
+        .sidebar-item-active .sidebar-item-icon {
+            color: #c4b5fd; /* violet-300 */
+        }
+        .sidebar-indicator {
+            position: absolute;
+            left: -4px; /* Move outside the padding */
+            width: 4px;
+            background: linear-gradient(180deg, #67e8f9, #a855f7); /* cyan to purple */
+            border-radius: 0 4px 4px 0;
+            box-shadow: 0 0 8px #a855f7, 0 0 12px #67e8f9;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0;
+        }
+
+
         /* --- NEW: PIVOT TABLE REDESIGN (FLAT & PROFESSIONAL) --- */
         .pivot-table-container table {
             border-collapse: collapse;
@@ -455,7 +516,190 @@
           background: radial-gradient(circle at 30% 30%, #e5e7eb, #9ca3af); 
         }
 
+        /* --- UPDATED: Diagramming Matrix Styles (PERFORMANCE) --- */
+        .diagram-canvas {
+            cursor: grab;
+            background-color: #0A0F1E;
+            background-image:
+                radial-gradient(circle at center, rgba(14, 24, 45, 0.8) 0%, transparent 70%),
+                linear-gradient(var(--grid-color, rgba(59, 130, 246, 0.07)) 1px, transparent 1px),
+                linear-gradient(to right, var(--grid-color, rgba(59, 130, 246, 0.07)) 1px, transparent 1px);
+            background-size: 100% 100%, 30px 30px;
+            transition: background-color 0.3s;
+        }
+        .diagram-canvas.grabbing {
+            cursor: grabbing;
+        }
+        .diagram-canvas.presentation-mode {
+          position: fixed;
+          top: 0; left: 0;
+          width: 100vw; height: 100vh;
+          z-index: 2000;
+        }
+        .diagram-canvas.select-mode {
+            cursor: crosshair;
+        }
 
+        .diagram-node {
+            cursor: move;
+            transition: filter 0.2s ease; /* Remove transform for performance */
+            user-select: none;
+        }
+        .diagram-node:hover > * {
+            /* Apply a subtle glow on the child elements to avoid jitter */
+            filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.6));
+        }
+        .diagram-node.selected > rect,
+        .diagram-node.selected > ellipse,
+        .diagram-node.selected > polygon,
+        .diagram-node.selected > path {
+            stroke: #22d3ee; /* Bright cyan for selection */
+            stroke-width: 3px !important; /* Thicker, static stroke */
+            filter: drop-shadow(0 0 6px #22d3ee); /* Prominent glow on selection */
+            /* Removed unstable animation */
+        }
+        
+        .diagram-node text {
+            user-select: none;
+            pointer-events: none;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+
+        .diagram-edge path {
+            transition: stroke-width 0.2s, opacity 0.2s;
+        }
+        .diagram-edge.selected path {
+            stroke-width: 4px !important;
+            opacity: 1 !important;
+        }
+        .animated-edge {
+            stroke-dasharray: 8;
+            animation: dash-flow 2s linear infinite;
+        }
+        @keyframes dash-flow { to { stroke-dashoffset: -16; } }
+
+        .resize-handle {
+            cursor: nwse-resize;
+            fill: #00ffff;
+            stroke: #0A0F1E;
+            stroke-width: 2px;
+        }
+
+        .connection-port {
+            fill: #22d3ee;
+            stroke: #0A0F1E;
+            stroke-width: 2px;
+            cursor: crosshair;
+            opacity: 0;
+            transition: opacity 0.2s ease, r 0.2s ease;
+        }
+        .diagram-node:hover .connection-port {
+            opacity: 1;
+        }
+        .connection-port:hover {
+            r: 8px !important;
+        }
+
+        .asset-palette-item {
+          border: 2px solid rgba(139, 92, 246, 0.4);
+          background-color: rgba(14, 24, 45, 0.2);
+          transition: all 0.2s ease-in-out;
+        }
+        .asset-palette-item:hover {
+          transform: scale(1.05);
+          border-color: rgba(59, 130, 246, 0.8);
+          background-color: rgba(14, 24, 45, 0.6);
+        }
+        .exit-presentation-button {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            z-index: 2001; /* Above presentation canvas */
+            padding: 0.75rem;
+            border-radius: 9999px;
+            background-color: rgba(14, 24, 45, 0.7);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            color: white;
+            transition: all 0.2s ease-in-out;
+        }
+        .exit-presentation-button:hover {
+            transform: scale(1.1);
+            background-color: rgba(139, 92, 246, 0.4);
+        }
+        /* --- NEW: Diagram Zoom Controls --- */
+        .diagram-controls {
+            position: absolute;
+            bottom: 1rem;
+            right: 1rem;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .diagram-zoom-button {
+            width: 2.5rem;
+            height: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(14, 24, 45, 0.7);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            color: white;
+            border-radius: 9999px;
+            transition: all 0.2s ease-in-out;
+            backdrop-filter: blur(5px);
+        }
+        .diagram-zoom-button:hover {
+            transform: scale(1.1);
+            background-color: rgba(139, 92, 246, 0.4);
+        }
+        .diagram-zoom-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* --- NEW: Marquee Selection for Diagramming --- */
+        .marquee-selection {
+            fill: rgba(34, 211, 238, 0.15);
+            stroke: rgba(34, 211, 238, 0.8);
+            stroke-width: 1px;
+            stroke-dasharray: 4 2;
+        }
+
+        /* --- NEW: Alignment Toolbar for Diagramming --- */
+        .alignment-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            background-color: rgba(14, 24, 45, 0.8);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            padding: 4px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .alignment-toolbar-button {
+            padding: 6px;
+            color: #d1d5db; /* gray-300 */
+            background-color: transparent;
+            border-radius: 6px;
+            transition: all 0.2s ease-in-out;
+        }
+        .alignment-toolbar-button:hover {
+            background-color: rgba(139, 92, 246, 0.3);
+            color: white;
+        }
+        .alignment-toolbar-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .alignment-toolbar-separator {
+            width: 1px;
+            height: 20px;
+            background-color: rgba(139, 92, 246, 0.4);
+            margin: 0 4px;
+        }
     </style>
 <script type="importmap">
 {
@@ -470,7 +714,10 @@
     "three/examples/jsm/controls/OrbitControls.js": "https://esm.sh/three@^0.168.0/examples/jsm/controls/OrbitControls.js",
     "xlsx": "https://esm.sh/xlsx@^0.18.5",
     "three/": "https://esm.sh/three@^0.177.0/",
-    "marked": "https://esm.sh/marked@^14.0.0"
+    "marked": "https://esm.sh/marked@^14.0.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.525.0",
+    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1"
   }
 }
 </script>

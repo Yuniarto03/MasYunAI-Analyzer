@@ -1,6 +1,3 @@
-
-
-
 // This file is a placeholder for more complex Gemini API interactions.
 // For the current chat functionality, the logic is within AIChat.tsx for simplicity.
 // If more features use Gemini (e.g., data analysis insights), centralize API calls here.
@@ -21,8 +18,8 @@ const getClient = (): GoogleGenAI => {
   return ai;
 };
 
-// Example of a non-chat generateContent call
-export const generateText = async (prompt: string): Promise<string> => {
+// Generic command function for AI text generation
+export const generateAICommand = async (prompt: string): Promise<string> => {
   try {
     const client = getClient();
     const params: GenerateContentParameters = {
@@ -266,6 +263,96 @@ export const generateDocumentation = async (featuresPrompt: string): Promise<str
             return `<h1>Error during documentation generation</h1><p>${error.message}</p>`;
         }
         return '<h1>An unknown error occurred during AI analysis.</h1>';
+    }
+};
+
+export const generateDiagramFromPrompt = async (prompt: string): Promise<{ nodes: any[], edges: any[] }> => {
+    const client = getClient();
+    const systemInstruction = `You are a creative diagram designer. Your task is to generate a JSON object representing a visually appealing diagram from text. The JSON object must have "nodes" and "edges".
+
+- "nodes" is an array. Each node must have:
+  - "id": A unique string (e.g., "node-1").
+  - "type": "rectangle", "ellipse", "diamond", or "image".
+  - "position": An object with "x" and "y" numbers. Arrange nodes logically.
+  - "size": An object with "width" and "height".
+  - "data": An object with:
+    - "label": The text inside the node.
+    - "style": An object. CRITICAL: For each node, assign a unique and vibrant \`backgroundColor\` and a contrasting \`borderColor\` from a futuristic palette (e.g., #0e182d, #1f2937 for backgrounds; #3b82f6, #8b5cf6, #10b981, #06b6d4, #eab308 for borders). Also set \`color\` for the text to be readable (e.g., #e5e7eb). If the user asks for an icon, include an "icon" property with a keyword (e.g., "database", "cloud").
+
+- "edges" is an array. Each edge must have:
+  - "id": A unique string (e.g., "edge-1").
+  - "source": The source node "id".
+  - "target": The target node "id".
+  - "label": An optional label string.
+
+Respond ONLY with the perfectly valid JSON object. Do not include any other text or markdown fences.
+
+Example User Prompt: "Create a workflow for a web server. Start with a 'Client Request', which goes to a 'Load Balancer'. The load balancer then sends traffic to one of two 'Web Server' nodes, which both connect to a 'Database' node with a database icon."
+
+Example JSON Response:
+{
+  "nodes": [
+    { "id": "node-1", "type": "ellipse", "position": { "x": 325, "y": 50 }, "size": { "width": 150, "height": 50 }, "data": { "label": "Client Request", "style": { "backgroundColor": "#1f2937", "borderColor": "#3b82f6", "color": "#e5e7eb" } } },
+    { "id": "node-2", "type": "rectangle", "position": { "x": 325, "y": 150 }, "size": { "width": 150, "height": 75 }, "data": { "label": "Load Balancer", "style": { "backgroundColor": "#1f2937", "borderColor": "#10b981", "color": "#e5e7eb" } } },
+    { "id": "node-3", "type": "rectangle", "position": { "x": 200, "y": 275 }, "size": { "width": 150, "height": 75 }, "data": { "label": "Web Server 1", "style": { "backgroundColor": "#0e182d", "borderColor": "#06b6d4", "color": "#e5e7eb" } } },
+    { "id": "node-4", "type": "rectangle", "position": { "x": 450, "y": 275 }, "size": { "width": 150, "height": 75 }, "data": { "label": "Web Server 2", "style": { "backgroundColor": "#0e182d", "borderColor": "#06b6d4", "color": "#e5e7eb" } } },
+    { "id": "node-5", "type": "rectangle", "position": { "x": 325, "y": 425 }, "size": { "width": 150, "height": 75 }, "data": { "label": "Database", "style": { "icon": "database", "backgroundColor": "#1f2937", "borderColor": "#eab308", "color": "#e5e7eb" } } }
+  ],
+  "edges": [
+    { "id": "edge-1", "source": "node-1", "target": "node-2" },
+    { "id": "edge-2", "source": "node-2", "target": "node-3" },
+    { "id": "edge-3", "source": "node-2", "target": "node-4" },
+    { "id": "edge-4", "source": "node-3", "target": "node-5" },
+    { "id": "edge-5", "source": "node-4", "target": "node-5" }
+  ]
+}
+`;
+
+    const response = await client.models.generateContent({
+        model: MODEL_TEXT,
+        contents: prompt,
+        config: {
+            systemInstruction,
+            responseMimeType: "application/json",
+            temperature: 0.2, // Lower temperature for more predictable, structured output
+        }
+    });
+
+    let jsonStr = response.text.trim();
+    
+    // The model might return the JSON inside markdown fences, with leading/trailing text.
+    // This logic attempts to extract the core JSON object.
+    const fenceRegex = /```(?:json)?\s*({[\s\S]*?})\s*```/s;
+    const fenceMatch = jsonStr.match(fenceRegex);
+    
+    if (fenceMatch && fenceMatch[1]) {
+        jsonStr = fenceMatch[1];
+    } else {
+        const firstBrace = jsonStr.indexOf('{');
+        const lastBrace = jsonStr.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+            jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+        }
+    }
+
+    try {
+        const parsedData = JSON.parse(jsonStr);
+        if (parsedData.nodes && parsedData.edges && Array.isArray(parsedData.nodes) && Array.isArray(parsedData.edges)) {
+            // Ensure nodes have a data.style object, even if data or style is missing from the AI response
+            const sanitizedNodes = parsedData.nodes.map((node: any) => ({
+                ...node,
+                data: {
+                    ...(node.data || {}),
+                    style: node.data?.style || {}
+                }
+            }));
+            return { nodes: sanitizedNodes, edges: parsedData.edges };
+        }
+        throw new Error("Invalid JSON structure received from AI: missing 'nodes' or 'edges' array.");
+    } catch (e: any) {
+        console.error("Failed to parse JSON response from AI:", e);
+        console.error("Attempted to parse the following text:", jsonStr);
+        throw new Error(`The AI returned a malformed response that could not be parsed as JSON. Please try again or rephrase your prompt. Error: ${e.message}`);
     }
 };
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IconType, ViewKey, NavMenuItemConfig as TopNavMenuItemConfig, NavSubMenuItemConfig } from '../types';
 import { NAV_MENU_ITEMS } from '../constants';
 
@@ -68,6 +68,28 @@ const NavMenuItem: React.FC<NavMenuItemProps> = ({ item, onNavigate }) => {
 
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, isSidebarOpen, onNavigate }) => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+      const timer = setInterval(() => {
+          setCurrentTime(new Date());
+      }, 1000);
+      return () => clearInterval(timer);
+  }, []);
+
+  const formatTime = (date: Date) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayName = days[date.getDay()];
+    const dayOfMonth = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    
+    // Using a clear, readable format that includes all requested elements.
+    const timeString = date.toLocaleTimeString('en-US', { hour12: false });
+    
+    return `${dayName}, ${dayOfMonth}/${month}/${year} ${timeString}`;
+  };
+
   return (
     <nav className="fixed top-0 left-0 right-0 bg-gray-900 bg-opacity-70 backdrop-blur-md shadow-lg z-50 h-16 flex items-center px-4">
       <div className="flex items-center">
@@ -101,6 +123,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, isSidebarOpen, 
             <SearchIcon className="h-5 w-5" />
           </div>
         </div>
+        
+        <div className="text-sm text-gray-300 mr-4 whitespace-nowrap hidden lg:block" title={new Date().toString()}>
+           {formatTime(currentTime)}
+        </div>
+
         <div className="flex items-center space-x-3">
           <div 
             className="h-9 w-9 rounded-full bg-gradient-to-r from-purple-600 to-blue-500 flex items-center justify-center text-sm font-semibold cursor-pointer"
