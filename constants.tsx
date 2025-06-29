@@ -14,7 +14,7 @@ import {
 // Example Icons (replace with actual SVGs or a library like Heroicons)
 const WelcomeIcon: IconType = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 22.5l-.648-1.938a2.25 2.25 0 01-1.473-1.473L12 18.75l1.938-.648a2.25 2.25 0 011.473-1.473L17.75 15l.648 1.938a2.25 2.25 0 011.473 1.473L22.5 18.75l-1.938.648a2.25 2.25 0 01-1.473 1.473z" />
     </svg>
 );
 const HomeIcon: IconType = ({ className }) => (
@@ -88,6 +88,36 @@ const DiagramIcon: IconType = ({ className }) => (
     </svg>
 );
 
+const RouteIcon: IconType = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+    </svg>
+);
+
+const DocumentIcon: IconType = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>
+);
+
+const FolderIcon: IconType = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25H11.69z" />
+    </svg>
+);
+
+const SaveIcon: IconType = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+    </svg>
+);
+
+const ExportIcon: IconType = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>
+);
+
 
 export const CheckCircleIcon: IconType = ({ className }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -103,6 +133,7 @@ export const DOCK_ITEMS: DockItemConfig[] = [
   { id: 'dataTable', label: 'Data Table', icon: TableIcon },
   { id: 'visualizations', label: 'Charts', icon: ChartIcon },
   { id: 'pivotTable', label: 'Pivot Table', icon: PivotIcon },
+  { id: 'routePlanner', label: 'Route Planner', icon: RouteIcon },
   { id: 'aiAssistant', label: 'AI Assistant', icon: AIAssistantIcon },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
@@ -119,21 +150,14 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     ]
   },
   {
-    title: "Analysis Tools", // Renamed for clarity
+    title: "Analysis Tools",
     items: [
         { name: "Data Explorer", icon: TableIcon, viewId: 'dataTable'},
         { name: "Visualizations", icon: ChartIcon, viewId: 'visualizations'},
         { name: "Pivot Tables", icon: PivotIcon, viewId: 'pivotTable'},
+        { name: "Route Planner", icon: RouteIcon, viewId: 'routePlanner'},
         { name: "Diagramming Matrix", icon: DiagramIcon, viewId: 'diagrammingMatrix' },
         { name: "Statistical Analysis", icon: StatsIcon, viewId: 'statisticalAnalysis' },
-    ]
-  },
-  {
-    title: "Recent Projects", 
-    items: [
-      { name: "Sales Analysis Q3", icon: ProjectIcon, viewId: 'projectDetails' },
-      { name: "Marketing Campaign", icon: ProjectIcon, viewId: 'projectDetails' },
-      { name: "Customer Behavior", icon: ProjectIcon, viewId: 'projectDetails' },
     ]
   },
   {
@@ -150,10 +174,13 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
         name: "File",
         subItems: [
             { name: "New Project", viewId: 'genericPlaceholder' },
-            { name: "Open...", viewId: 'genericPlaceholder' },
-            { name: "Save", viewId: 'genericPlaceholder' },
+            { name: "Open Project", viewId: 'genericPlaceholder' },
+            { name: "Save Project", viewId: 'genericPlaceholder' },
+            { name: "Save As...", viewId: 'genericPlaceholder' },
             { name: "Import Data", viewId: 'dataUpload' },
-            { name: "Export", viewId: 'genericPlaceholder' }
+            { name: "Export Data", viewId: 'genericPlaceholder' },
+            { name: "Export Chart", viewId: 'genericPlaceholder' },
+            { name: "Print", viewId: 'genericPlaceholder' }
         ]
     },
     {
@@ -163,7 +190,9 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
             { name: "Redo", viewId: 'genericPlaceholder' }, 
             { name: "Cut", viewId: 'genericPlaceholder' }, 
             { name: "Copy", viewId: 'genericPlaceholder' }, 
-            { name: "Paste", viewId: 'genericPlaceholder' }
+            { name: "Paste", viewId: 'genericPlaceholder' },
+            { name: "Select All", viewId: 'genericPlaceholder' },
+            { name: "Find & Replace", viewId: 'genericPlaceholder' }
         ]
     },
     {
@@ -172,9 +201,11 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
             { name: "Welcome", viewId: 'welcome' },
             { name: "Dashboard", viewId: 'dashboard' },
             { name: "Data Explorer", viewId: 'dataTable' },
-            { name: "Pivot Tables", viewId: 'pivotTable' }, // Updated viewId
+            { name: "Pivot Tables", viewId: 'pivotTable' },
             { name: "Visualizations", viewId: 'visualizations' },
-            { name: "AI Assistant", viewId: 'aiAssistant' } 
+            { name: "Route Planner", viewId: 'routePlanner' },
+            { name: "AI Assistant", viewId: 'aiAssistant' },
+            { name: "Settings", viewId: 'settings' }
         ]
     },
     {
@@ -182,6 +213,7 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
         subItems: [
             { name: "Data Cleaning", viewId: 'genericPlaceholder' }, 
             { name: "Statistical Analysis", viewId: 'statisticalAnalysis' }, 
+            { name: "Route Planning", viewId: 'routePlanner' },
             { name: "Machine Learning", viewId: 'genericPlaceholder' },
             { name: "Report Generator", viewId: 'genericPlaceholder' }
         ]

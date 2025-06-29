@@ -21,6 +21,7 @@ import { StatisticalAnalysisView } from './components/views/StatisticalAnalysisV
 import { WorkflowView } from './components/views/WorkflowView';
 import { AIAssistantView } from './components/views/AIAssistantView';
 import { DiagrammingMatrixView } from './components/views/DiagrammingMatrixView';
+import RoutePlannerPage from './RoutePlannerPage';
 import { DOCK_ITEMS, NAV_MENU_ITEMS, SIDEBAR_SECTIONS } from './constants';
 import { IconType, ViewKey, Theme } from './types'; 
 import { DataProvider } from './contexts/DataContext';
@@ -85,7 +86,7 @@ const AppContent: React.FC = () => {
   const mainViews: ViewKey[] = [
     'welcome', 'dashboard', 'dataUpload', 'dataTable', 'visualizations', 'settings',
     'onlineConnectors', 'projectDetails', 'advancedAITools', 'pivotTable', 'about',
-    'statisticalAnalysis', 'workflow', 'aiAssistant', 'diagrammingMatrix'
+    'statisticalAnalysis', 'workflow', 'aiAssistant', 'diagrammingMatrix', 'routePlanner'
   ];
   
   useEffect(() => {
@@ -147,6 +148,7 @@ const AppContent: React.FC = () => {
           <div style={{ display: activeView === 'about' ? 'block' : 'none' }}><AboutView /></div>
           <div style={{ display: activeView === 'statisticalAnalysis' ? 'block' : 'none' }}><StatisticalAnalysisView /></div>
           <div style={{ display: activeView === 'workflow' ? 'block' : 'none' }}><WorkflowView /></div>
+          <div style={{ display: activeView === 'routePlanner' ? 'block' : 'none' }}><RoutePlannerPage /></div>
           <div style={{ display: activeView === 'diagrammingMatrix' ? 'flex' : 'none', height: '100%' }}><DiagrammingMatrixView onNavigate={handleViewChange} /></div>
           <div style={{ display: isGenericViewActive ? 'block' : 'none' }}><GenericPlaceholderView featureName={genericFeatureName} /></div>
         </main>
