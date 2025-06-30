@@ -13,7 +13,13 @@ const defaultTheme: Theme = {
   accent2: 'purple-500', 
   accent3: 'green-400',
   accent4: 'yellow-400',
-  darkBg: 'gray-900'
+  darkBg: 'gray-900',
+  textColor: 'text-gray-100',
+  cardBg: 'bg-gray-800/80',
+  borderColor: 'border-gray-700',
+  mediumGray: 'gray-600',
+  darkGray: 'gray-800',
+  contentBg: 'bg-gray-900'
 };
 
 export const AppContext = createContext<AppContextType>({

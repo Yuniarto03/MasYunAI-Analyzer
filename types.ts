@@ -59,7 +59,8 @@ export type ViewKey =
   | 'about'
   | 'aiAssistant'
   | 'diagrammingMatrix'
-  | 'routePlanner';
+  | 'routePlanner'
+  | 'milestonePlanner';
 
 export interface NavSubMenuItemConfig {
     name: string;
@@ -262,6 +263,12 @@ export interface Theme {
   accent3: string;
   accent4: string;
   darkBg: string;
+  textColor: string;
+  cardBg: string;
+  borderColor: string;
+  mediumGray: string;
+  darkGray: string;
+  contentBg: string;
 }
 
 // --- NEW TYPES FOR DIAGRAMMING MATRIX ---
@@ -354,6 +361,47 @@ export interface BulkRouteResultItem extends RouteResult {
   id: string;
   originalInputA: string;
   originalInputB: string;
+}
+
+// --- NEW TYPES FOR MILESTONE PLANNER ---
+export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'delayed' | 'cancelled';
+export type MilestonePriority = 'low' | 'medium' | 'high' | 'critical';
+export type MilestoneOutputType = 'csv' | 'json' | 'text' | 'ai_report';
+
+export interface SubTask {
+  id: string;
+  title: string;
+  completed: boolean;
+  assignee?: string;
+  dueDate?: string;
+}
+
+export interface Milestone {
+  id: string;
+  date: string;
+  title: string;
+  description?: string;
+  value?: string;
+  category: string;
+  status?: MilestoneStatus;
+  priority?: MilestonePriority;
+  assignee?: string;
+  tags?: string[];
+  subTasks?: SubTask[];
+  source: 'manual' | 'uploaded';
+  durationFromPrevious?: string;
+  durationFromStart?: string;
+  completionPercentage?: number;
+  dependencies?: string[];
+  estimatedHours?: number;
+  actualHours?: number;
+  budget?: number;
+  actualCost?: number;
+  notes?: string;
+}
+
+export interface DataRow {
+  [key: string]: any;
 }
 
 // --- APP CONTEXT TYPE ---

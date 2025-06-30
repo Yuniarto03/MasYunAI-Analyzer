@@ -9,17 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react-dom": "^19.1.0",
-    "react": "^19.1.0",
     "@google/genai": "^1.6.0",
-    "recharts": "^3.0.0",
-    "react-dropzone": "^14.3.8",
-    "three": "^0.177.0",
-    "xlsx": "^0.18.5",
-    "marked": "^14.0.0",
     "lucide-react": "^0.525.0",
+    "marked": "^14.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-dropzone": "^14.3.8",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "recharts": "^3.0.0",
+    "remark-gfm": "^4.0.1",
+    "three": "^0.177.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
