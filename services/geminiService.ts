@@ -452,18 +452,26 @@ export const geocodeAddressWithGemini = async (address: string): Promise<LatLngT
     });
 };
 
-export const reverseGeocodeWithGemini = async (lat: number, lng: number): Promise<{ address: string; city: string } | { error: string }> => {
+export const reverseGeocodeWithGemini = async (lat: number, lng: number): Promise<{ address: string; city: string; country: string; fullLocation: string } | { error: string }> => {
     return retryWithBackoff(async () => {
         try {
             const client = getClient();
-            const prompt = `Convert these coordinates to a readable address and city name: ${lat}, ${lng}
+            const prompt = `Convert these coordinates to a readable address and location information: ${lat}, ${lng}
             
             Respond in this exact format:
             ADDRESS: [full street address or landmark name]
-            CITY: [city name, country]
+            CITY: [city name]
+            COUNTRY: [country name]
+            FULL_LOCATION: [complete location description including city and country]
             
             If you cannot determine the location, respond with:
-            ERROR: Unable to reverse geocode coordinates`;
+            ERROR: Unable to reverse geocode coordinates
+            
+            Example response:
+            ADDRESS: Jalan Sudirman No. 1
+            CITY: Jakarta
+            COUNTRY: Indonesia
+            FULL_LOCATION: Jakarta, Indonesia`;
             
             const response = await client.models.generateContent({
                 model: MODEL_TEXT,
@@ -481,11 +489,15 @@ export const reverseGeocodeWithGemini = async (lat: number, lng: number): Promis
             
             const addressMatch = text.match(/ADDRESS:\s*(.+)/);
             const cityMatch = text.match(/CITY:\s*(.+)/);
+            const countryMatch = text.match(/COUNTRY:\s*(.+)/);
+            const fullLocationMatch = text.match(/FULL_LOCATION:\s*(.+)/);
             
-            if (addressMatch && cityMatch) {
+            if (addressMatch && cityMatch && countryMatch && fullLocationMatch) {
                 return {
                     address: addressMatch[1].trim(),
-                    city: cityMatch[1].trim()
+                    city: cityMatch[1].trim(),
+                    country: countryMatch[1].trim(),
+                    fullLocation: fullLocationMatch[1].trim()
                 };
             }
             
@@ -500,19 +512,30 @@ export const reverseGeocodeWithGemini = async (lat: number, lng: number): Promis
     });
 };
 
-export const findNearestValidCoordinates = async (lat: number, lng: number): Promise<{ coordinates: LatLngTuple; address: string; city: string } | { error: string }> => {
+export const findNearestValidCoordinates = async (lat: number, lng: number): Promise<{ coordinates: LatLngTuple; address: string; city: string; country: string; fullLocation: string; distance: string } | { error: string }> => {
     return retryWithBackoff(async () => {
         try {
             const client = getClient();
-            const prompt = `The coordinates ${lat}, ${lng} appear to be invalid or in an inaccessible location. 
-            Find the nearest valid, accessible location (like a nearby city, landmark, or populated area) and provide:
+            const prompt = `The coordinates ${lat}, ${lng} appear to be invalid or in an inaccessible location (possibly in the ocean, desert, or restricted area). 
+            Find the nearest valid, accessible, populated location (like a nearby city, town, landmark, or populated area) and provide:
             
             COORDINATES: [latitude,longitude]
             ADDRESS: [readable address or landmark name]
-            CITY: [city name, country]
+            CITY: [city name]
+            COUNTRY: [country name]
+            FULL_LOCATION: [complete location description]
+            DISTANCE: [approximate distance from original coordinates, e.g., "15 km away"]
             
             If you cannot find a suitable nearby location, respond with:
-            ERROR: No valid nearby location found`;
+            ERROR: No valid nearby location found
+            
+            Example response:
+            COORDINATES: -6.2088,106.8456
+            ADDRESS: Jakarta City Center
+            CITY: Jakarta
+            COUNTRY: Indonesia
+            FULL_LOCATION: Jakarta, Indonesia
+            DISTANCE: 25 km away`;
             
             const response = await client.models.generateContent({
                 model: MODEL_TEXT,
@@ -531,8 +554,11 @@ export const findNearestValidCoordinates = async (lat: number, lng: number): Pro
             const coordsMatch = text.match(/COORDINATES:\s*([^,]+),\s*(.+)/);
             const addressMatch = text.match(/ADDRESS:\s*(.+)/);
             const cityMatch = text.match(/CITY:\s*(.+)/);
+            const countryMatch = text.match(/COUNTRY:\s*(.+)/);
+            const fullLocationMatch = text.match(/FULL_LOCATION:\s*(.+)/);
+            const distanceMatch = text.match(/DISTANCE:\s*(.+)/);
             
-            if (coordsMatch && addressMatch && cityMatch) {
+            if (coordsMatch && addressMatch && cityMatch && countryMatch && fullLocationMatch) {
                 const newLat = parseFloat(coordsMatch[1].trim());
                 const newLng = parseFloat(coordsMatch[2].trim());
                 
@@ -540,7 +566,10 @@ export const findNearestValidCoordinates = async (lat: number, lng: number): Pro
                     return {
                         coordinates: [newLat, newLng],
                         address: addressMatch[1].trim(),
-                        city: cityMatch[1].trim()
+                        city: cityMatch[1].trim(),
+                        country: countryMatch[1].trim(),
+                        fullLocation: fullLocationMatch[1].trim(),
+                        distance: distanceMatch ? distanceMatch[1].trim() : 'Unknown distance'
                     };
                 }
             }
@@ -553,6 +582,110 @@ export const findNearestValidCoordinates = async (lat: number, lng: number): Pro
     }).catch(error => {
         console.error('Final nearest coordinates error after retries:', error);
         return { error: 'Failed to find nearest valid location after multiple attempts. Please try again later.' };
+    });
+};
+
+export const enhancedBulkGeocoding = async (input: string, isCoordinate: boolean = false): Promise<{
+    originalInput: string;
+    resolvedCoordinates: LatLngTuple | null;
+    resolvedAddress: string;
+    resolvedCity: string;
+    resolvedCountry: string;
+    resolvedFullLocation: string;
+    processingType: 'coordinate_to_address' | 'address_to_coordinate' | 'nearest_valid_found' | 'failed';
+    additionalInfo?: string;
+    error?: string;
+}> => {
+    return retryWithBackoff(async () => {
+        try {
+            const result = {
+                originalInput: input,
+                resolvedCoordinates: null as LatLngTuple | null,
+                resolvedAddress: '',
+                resolvedCity: '',
+                resolvedCountry: '',
+                resolvedFullLocation: '',
+                processingType: 'failed' as const,
+                additionalInfo: '',
+                error: ''
+            };
+
+            if (isCoordinate) {
+                // Input is coordinates - try to get address
+                const coords = input.split(',').map(c => parseFloat(c.trim()));
+                if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                    result.resolvedCoordinates = [coords[0], coords[1]];
+                    
+                    // Try reverse geocoding
+                    const reverseResult = await reverseGeocodeWithGemini(coords[0], coords[1]);
+                    if (reverseResult && !('error' in reverseResult)) {
+                        result.resolvedAddress = reverseResult.address;
+                        result.resolvedCity = reverseResult.city;
+                        result.resolvedCountry = reverseResult.country;
+                        result.resolvedFullLocation = reverseResult.fullLocation;
+                        result.processingType = 'coordinate_to_address';
+                        result.additionalInfo = 'Successfully converted coordinates to address';
+                    } else {
+                        // Try to find nearest valid coordinates
+                        const nearestResult = await findNearestValidCoordinates(coords[0], coords[1]);
+                        if (nearestResult && !('error' in nearestResult)) {
+                            result.resolvedCoordinates = nearestResult.coordinates;
+                            result.resolvedAddress = nearestResult.address;
+                            result.resolvedCity = nearestResult.city;
+                            result.resolvedCountry = nearestResult.country;
+                            result.resolvedFullLocation = nearestResult.fullLocation;
+                            result.processingType = 'nearest_valid_found';
+                            result.additionalInfo = `Found nearest valid location: ${nearestResult.distance}`;
+                        } else {
+                            result.error = 'Could not resolve coordinates to address or find nearest valid location';
+                            result.resolvedAddress = `Coordinates: ${coords[0]}, ${coords[1]}`;
+                            result.resolvedFullLocation = `Unknown Location (${coords[0]}, ${coords[1]})`;
+                        }
+                    }
+                } else {
+                    result.error = 'Invalid coordinate format';
+                }
+            } else {
+                // Input is address - try to get coordinates
+                const geocodeResult = await geocodeAddressWithGemini(input);
+                if (geocodeResult && !('error' in geocodeResult)) {
+                    result.resolvedCoordinates = geocodeResult;
+                    result.resolvedAddress = input;
+                    result.resolvedFullLocation = input;
+                    result.processingType = 'address_to_coordinate';
+                    result.additionalInfo = 'Successfully converted address to coordinates';
+                    
+                    // Try to get more detailed location info
+                    const reverseResult = await reverseGeocodeWithGemini(geocodeResult[0], geocodeResult[1]);
+                    if (reverseResult && !('error' in reverseResult)) {
+                        result.resolvedCity = reverseResult.city;
+                        result.resolvedCountry = reverseResult.country;
+                        result.resolvedFullLocation = reverseResult.fullLocation;
+                    }
+                } else {
+                    result.error = 'Could not geocode address';
+                    result.resolvedAddress = input;
+                    result.resolvedFullLocation = input;
+                }
+            }
+
+            return result;
+        } catch (error) {
+            console.error('Error in enhanced bulk geocoding:', error);
+            throw error;
+        }
+    }).catch(error => {
+        console.error('Final enhanced bulk geocoding error after retries:', error);
+        return {
+            originalInput: input,
+            resolvedCoordinates: null,
+            resolvedAddress: input,
+            resolvedCity: '',
+            resolvedCountry: '',
+            resolvedFullLocation: input,
+            processingType: 'failed' as const,
+            error: 'Failed to process location after multiple attempts. Please try again later.'
+        };
     });
 };
 
@@ -647,4 +780,4 @@ export const analyzeTextWithGemini = async (
 //   return generateText(prompt);
 // };
 
-console.log('Gemini Service initialized with retry mechanism. Ensure API_KEY is set in your environment.');
+console.log('Gemini Service initialized with enhanced route processing capabilities. Ensure API_KEY is set in your environment.');

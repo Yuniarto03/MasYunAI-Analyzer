@@ -4,9 +4,9 @@ import * as XLSX from 'xlsx';
 import { AppContext } from '../../contexts/AppContext';
 import { AppContextType, RouteResult, CountryInfo, RouteCalculation, BulkRouteResultItem, LatLngTuple, TravelMode } from '../../types';
 import { RAW_COLOR_VALUES, COUNTRIES_DATA, AVERAGE_TRAVEL_SPEED_KMH, TRAVEL_MODES, HEURISTIC_TRAVEL_FACTORS } from '../../constants';
-import { MapPin, Navigation, AlertTriangle, CheckCircle, Calculator, Route, Info, Download, UploadCloud, Trash2, Clock, PlusCircle, Brain, Play, ChevronDown, ChevronUp, Bike, Car, PersonStanding, MapPinIcon, Globe } from 'lucide-react';
+import { MapPin, Navigation, AlertTriangle, CheckCircle, Calculator, Route, Info, Download, UploadCloud, Trash2, Clock, PlusCircle, Brain, Play, ChevronDown, ChevronUp, Bike, Car, PersonStanding, MapPinIcon, Globe, Zap, Target, Search } from 'lucide-react';
 import FuturisticBackground from '../FuturisticBackground';
-import { geocodeAddressWithGemini, getRouteAnalysisForDisplay, analyzeTextWithGemini, reverseGeocodeWithGemini, findNearestValidCoordinates } from '../../services/geminiService';
+import { geocodeAddressWithGemini, getRouteAnalysisForDisplay, analyzeTextWithGemini, reverseGeocodeWithGemini, findNearestValidCoordinates, enhancedBulkGeocoding } from '../../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { exportRouteResultsToXLSX } from '../../services/DataProcessingService';
@@ -37,6 +37,7 @@ export const RoutePlannerView: React.FC = () => {
   const [uploadedFile, setUploadedFile] = useState<FileWithPath | null>(null);
   const [bulkRouteResults, setBulkRouteResults] = useState<BulkRouteResultItem[]>([]);
   const [bulkFileProcessingError, setBulkFileProcessingError] = useState<string | null>(null);
+  const [bulkProcessingProgress, setBulkProcessingProgress] = useState<{ current: number; total: number } | null>(null);
   
   const [aiAnalysisInstruction, setAiAnalysisInstruction] = useState<string>('');
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export const RoutePlannerView: React.FC = () => {
   const [customSpeedKmh, setCustomSpeedKmh] = useState<number>(AVERAGE_TRAVEL_SPEED_KMH);
   const [includeTrafficFactor, setIncludeTrafficFactor] = useState<boolean>(true);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0);
+  const [enableSmartGeocoding, setEnableSmartGeocoding] = useState<boolean>(true);
 
   // State for minimizing sections
   const [isManualInputMinimized, setIsManualInputMinimized] = useState<boolean>(false);
@@ -107,70 +109,93 @@ export const RoutePlannerView: React.FC = () => {
     let resolvedLocationB = originalB;
 
     // Enhanced coordinate processing for Location A
-    if (finalCoordsA) {
-      // If input is coordinates, try to get address
-      try {
-        const reverseResult = await reverseGeocodeWithGemini(finalCoordsA[0], finalCoordsA[1]);
-        if (reverseResult && !('error' in reverseResult)) {
-          resolvedLocationA = `${reverseResult.address} (${reverseResult.city})`;
-        } else {
-          // Try to find nearest valid coordinates
-          const nearestResult = await findNearestValidCoordinates(finalCoordsA[0], finalCoordsA[1]);
-          if (nearestResult && !('error' in nearestResult)) {
-            finalCoordsA = nearestResult.coordinates;
-            resolvedLocationA = `${nearestResult.address} (${nearestResult.city}) - Nearest Valid Location`;
+    if (enableSmartGeocoding) {
+      if (finalCoordsA) {
+        // If input is coordinates, try to get address
+        try {
+          const reverseResult = await reverseGeocodeWithGemini(finalCoordsA[0], finalCoordsA[1]);
+          if (reverseResult && !('error' in reverseResult)) {
+            resolvedLocationA = `${reverseResult.address} (${reverseResult.fullLocation})`;
           } else {
-            resolvedLocationA = `${finalCoordsA[0]}, ${finalCoordsA[1]} (Coordinates)`;
+            // Try to find nearest valid coordinates
+            const nearestResult = await findNearestValidCoordinates(finalCoordsA[0], finalCoordsA[1]);
+            if (nearestResult && !('error' in nearestResult)) {
+              finalCoordsA = nearestResult.coordinates;
+              resolvedLocationA = `${nearestResult.address} (${nearestResult.fullLocation}) - ${nearestResult.distance}`;
+            } else {
+              resolvedLocationA = `${finalCoordsA[0]}, ${finalCoordsA[1]} (Coordinates)`;
+            }
           }
+        } catch (error) {
+          resolvedLocationA = `${finalCoordsA[0]}, ${finalCoordsA[1]} (Coordinates)`;
         }
-      } catch (error) {
-        resolvedLocationA = `${finalCoordsA[0]}, ${finalCoordsA[1]} (Coordinates)`;
+      } else if (locationAInput.trim()) {
+        // If input is address, geocode it
+        const geocodeResultA = await geocodeAddressWithGemini(locationAInput);
+        if (geocodeResultA && !('error' in geocodeResultA)) {
+          finalCoordsA = geocodeResultA;
+          geocodingPerformedA = true;
+          resolvedLocationA = locationAInput;
+        } else if (geocodeResultA && 'error' in geocodeResultA) {
+          errorMsgA = geocodeResultA.error;
+        } else {
+          errorMsgA = `Gagal mengubah "${locationAInput}" menjadi koordinat.`;
+        }
       }
-    } else if (locationAInput.trim()) {
-      // If input is address, geocode it
-      const geocodeResultA = await geocodeAddressWithGemini(locationAInput);
-      if (geocodeResultA && !('error' in geocodeResultA)) {
-        finalCoordsA = geocodeResultA;
-        geocodingPerformedA = true;
-        resolvedLocationA = locationAInput;
-      } else if (geocodeResultA && 'error' in geocodeResultA) {
-        errorMsgA = geocodeResultA.error;
-      } else {
-        errorMsgA = `Gagal mengubah "${locationAInput}" menjadi koordinat.`;
-      }
-    }
 
-    // Enhanced coordinate processing for Location B
-    if (finalCoordsB) {
-      // If input is coordinates, try to get address
-      try {
-        const reverseResult = await reverseGeocodeWithGemini(finalCoordsB[0], finalCoordsB[1]);
-        if (reverseResult && !('error' in reverseResult)) {
-          resolvedLocationB = `${reverseResult.address} (${reverseResult.city})`;
-        } else {
-          // Try to find nearest valid coordinates
-          const nearestResult = await findNearestValidCoordinates(finalCoordsB[0], finalCoordsB[1]);
-          if (nearestResult && !('error' in nearestResult)) {
-            finalCoordsB = nearestResult.coordinates;
-            resolvedLocationB = `${nearestResult.address} (${nearestResult.city}) - Nearest Valid Location`;
+      // Enhanced coordinate processing for Location B
+      if (finalCoordsB) {
+        // If input is coordinates, try to get address
+        try {
+          const reverseResult = await reverseGeocodeWithGemini(finalCoordsB[0], finalCoordsB[1]);
+          if (reverseResult && !('error' in reverseResult)) {
+            resolvedLocationB = `${reverseResult.address} (${reverseResult.fullLocation})`;
           } else {
-            resolvedLocationB = `${finalCoordsB[0]}, ${finalCoordsB[1]} (Coordinates)`;
+            // Try to find nearest valid coordinates
+            const nearestResult = await findNearestValidCoordinates(finalCoordsB[0], finalCoordsB[1]);
+            if (nearestResult && !('error' in nearestResult)) {
+              finalCoordsB = nearestResult.coordinates;
+              resolvedLocationB = `${nearestResult.address} (${nearestResult.fullLocation}) - ${nearestResult.distance}`;
+            } else {
+              resolvedLocationB = `${finalCoordsB[0]}, ${finalCoordsB[1]} (Coordinates)`;
+            }
           }
+        } catch (error) {
+          resolvedLocationB = `${finalCoordsB[0]}, ${finalCoordsB[1]} (Coordinates)`;
         }
-      } catch (error) {
-        resolvedLocationB = `${finalCoordsB[0]}, ${finalCoordsB[1]} (Coordinates)`;
+      } else if (locationBInput.trim()) {
+        // If input is address, geocode it
+        const geocodeResultB = await geocodeAddressWithGemini(locationBInput);
+        if (geocodeResultB && !('error' in geocodeResultB)) {
+          finalCoordsB = geocodeResultB;
+          geocodingPerformedB = true;
+          resolvedLocationB = locationBInput;
+        } else if (geocodeResultB && 'error' in geocodeResultB) {
+          errorMsgB = geocodeResultB.error;
+        } else {
+          errorMsgB = `Gagal mengubah "${locationBInput}" menjadi koordinat.`;
+        }
       }
-    } else if (locationBInput.trim()) {
-      // If input is address, geocode it
-      const geocodeResultB = await geocodeAddressWithGemini(locationBInput);
-      if (geocodeResultB && !('error' in geocodeResultB)) {
-        finalCoordsB = geocodeResultB;
-        geocodingPerformedB = true;
-        resolvedLocationB = locationBInput;
-      } else if (geocodeResultB && 'error' in geocodeResultB) {
-        errorMsgB = geocodeResultB.error;
-      } else {
-        errorMsgB = `Gagal mengubah "${locationBInput}" menjadi koordinat.`;
+    } else {
+      // Basic processing without smart geocoding
+      if (!finalCoordsA && locationAInput.trim()) {
+        const geocodeResultA = await geocodeAddressWithGemini(locationAInput);
+        if (geocodeResultA && !('error' in geocodeResultA)) {
+          finalCoordsA = geocodeResultA;
+          geocodingPerformedA = true;
+        } else if (geocodeResultA && 'error' in geocodeResultA) {
+          errorMsgA = geocodeResultA.error;
+        }
+      }
+
+      if (!finalCoordsB && locationBInput.trim()) {
+        const geocodeResultB = await geocodeAddressWithGemini(locationBInput);
+        if (geocodeResultB && !('error' in geocodeResultB)) {
+          finalCoordsB = geocodeResultB;
+          geocodingPerformedB = true;
+        } else if (geocodeResultB && 'error' in geocodeResultB) {
+          errorMsgB = geocodeResultB.error;
+        }
       }
     }
     
@@ -213,8 +238,8 @@ export const RoutePlannerView: React.FC = () => {
         estimatedTravelDurationHours: formatDuration(estimatedTravelHours),
         travelMode,
         error: null,
-        calculationType: (geocodingPerformedA || geocodingPerformedB) ? 'enhanced_geocoded_haversine' : 'enhanced_haversine',
-        message: `Estimasi durasi garis lurus @${customSpeedKmh}km/jam. Durasi perjalanan difaktorkan untuk ${travelMode.toLowerCase()}${includeTrafficFactor ? ' dengan faktor lalu lintas (+20%)' : ''}.`,
+        calculationType: enableSmartGeocoding ? 'smart_enhanced_haversine' : (geocodingPerformedA || geocodingPerformedB) ? 'enhanced_geocoded_haversine' : 'enhanced_haversine',
+        message: `Estimasi durasi garis lurus @${customSpeedKmh}km/jam. Durasi perjalanan difaktorkan untuk ${travelMode.toLowerCase()}${includeTrafficFactor ? ' dengan faktor lalu lintas (+20%)' : ''}${enableSmartGeocoding ? ' menggunakan Smart Geocoding' : ''}.`,
         status,
         fromLocation: finalCoordsA.join(','),
         toLocation: finalCoordsB.join(','),
@@ -231,7 +256,7 @@ export const RoutePlannerView: React.FC = () => {
     else if (!locationBInput.trim()) combinedError = "Lokasi B diperlukan.";
 
     return { ...baseErrorResult, error: combinedError, status };
-  }, [customSpeedKmh, includeTrafficFactor]); 
+  }, [customSpeedKmh, includeTrafficFactor, enableSmartGeocoding]); 
 
   const handleCalculateAllRoutes = async () => {
     setIsLoading(true);
@@ -317,12 +342,28 @@ export const RoutePlannerView: React.FC = () => {
       ["Jakarta, Indonesia", "Surabaya, Indonesia", "DRIVING"], 
       ["-6.2088,106.8456", "-7.2575,112.7521", "WALKING"],
       ["Eiffel Tower, Paris", "Big Ben, London", "CYCLING"],
-      ["40.7128,-74.0060", "34.0522,-118.2437", "DRIVING"]
+      ["40.7128,-74.0060", "34.0522,-118.2437", "DRIVING"],
+      ["0,0", "Invalid coordinates test", "DRIVING"],
+      ["Nonexistent Place XYZ", "Another Invalid Location", "WALKING"]
     ]);
-    XLSX.utils.sheet_add_aoa(ws, [["Note: You can use addresses, coordinates (lat,lng), or mix both. Travel modes: DRIVING, WALKING, CYCLING"]], {origin: "A6"});
+    XLSX.utils.sheet_add_aoa(ws, [
+      [""],
+      ["ENHANCED FEATURES:"],
+      ["✓ Smart coordinate detection and validation"],
+      ["✓ Automatic address resolution from coordinates"],
+      ["✓ Nearest valid location finder for invalid coordinates"],
+      ["✓ Mixed input support (addresses + coordinates)"],
+      ["✓ Comprehensive error handling and recovery"],
+      [""],
+      ["NOTES:"],
+      ["- You can use addresses, coordinates (lat,lng), or mix both"],
+      ["- Travel modes: DRIVING, WALKING, CYCLING"],
+      ["- Invalid coordinates will find nearest valid location"],
+      ["- System automatically converts coordinates to addresses"]
+    ], {origin: "A8"});
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "RoutesTemplate");
-    XLSX.writeFile(wb, "RoutePlanner_Enhanced_Template.xlsx");
+    XLSX.writeFile(wb, "RoutePlanner_Smart_Template.xlsx");
   };
 
   const onBulkDrop = useCallback(async (acceptedFiles: FileWithPath[]) => {
@@ -335,6 +376,7 @@ export const RoutePlannerView: React.FC = () => {
     setIsBulkLoading(true);
     setBulkRouteResults([]);
     setBulkFileProcessingError(null);
+    setBulkProcessingProgress(null);
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -352,8 +394,12 @@ export const RoutePlannerView: React.FC = () => {
           return;
         }
 
+        setBulkProcessingProgress({ current: 0, total: jsonData.length });
         const results: BulkRouteResultItem[] = [];
+        
         for (let i = 0; i < jsonData.length; i++) {
+          setBulkProcessingProgress({ current: i + 1, total: jsonData.length });
+          
           const row = jsonData[i];
           const from = row.From_Location || '';
           const to = row.To_Location || '';
@@ -361,27 +407,104 @@ export const RoutePlannerView: React.FC = () => {
           const travelMode = (TRAVEL_MODES.some(tm => tm.value === modeInput) ? modeInput : 'DRIVING') as TravelMode;
           const bulkId = `bulk-${Date.now()}-${i}`;
           
-          results.push({id: bulkId, originalInputA: from, originalInputB: to, travelMode, straightLineDistanceKm: null, straightLineDurationHours: null, estimatedTravelDurationHours: null, error: null, calculationType: null, status: 'pending' });
-          setBulkRouteResults([...results]); 
+          // Initialize result
+          let result: BulkRouteResultItem = {
+            id: bulkId, 
+            originalInputA: from, 
+            originalInputB: to, 
+            travelMode, 
+            straightLineDistanceKm: null, 
+            straightLineDurationHours: null, 
+            estimatedTravelDurationHours: null, 
+            error: null, 
+            calculationType: null, 
+            status: 'pending',
+            fromLocation: from,
+            toLocation: to
+          };
 
           if (from.trim() && to.trim()) {
-            const routeCalcItem: RouteCalculation = { id: bulkId, locationAInput: from, locationBInput: to, travelMode, result: null, color: theme.accent1 };
-            const result = await processSingleRoute(routeCalcItem);
-            results[i] = { ...results[i], ...result, originalInputA: from, originalInputB: to, fromLocation: result.fromLocation || from, toLocation: result.toLocation || to };
+            try {
+              // Enhanced bulk processing with smart geocoding
+              if (enableSmartGeocoding) {
+                const isFromCoordinate = parseCoordinates(from) !== null;
+                const isToCoordinate = parseCoordinates(to) !== null;
+                
+                // Process From location
+                const fromResult = await enhancedBulkGeocoding(from, isFromCoordinate);
+                // Process To location  
+                const toResult = await enhancedBulkGeocoding(to, isToCoordinate);
+                
+                if (fromResult.resolvedCoordinates && toResult.resolvedCoordinates) {
+                  // Calculate distance and duration
+                  const distanceKm = calculateHaversineDistance(
+                    fromResult.resolvedCoordinates[0], fromResult.resolvedCoordinates[1],
+                    toResult.resolvedCoordinates[0], toResult.resolvedCoordinates[1]
+                  );
+                  const straightLineHours = distanceKm / customSpeedKmh;
+                  const heuristicFactor = HEURISTIC_TRAVEL_FACTORS[travelMode] || 1;
+                  const trafficFactor = includeTrafficFactor ? 1.2 : 1;
+                  const estimatedTravelHours = straightLineHours * heuristicFactor * trafficFactor;
+                  
+                  result = {
+                    ...result,
+                    straightLineDistanceKm: `${distanceKm.toFixed(2)} km`,
+                    straightLineDurationHours: formatDuration(straightLineHours),
+                    estimatedTravelDurationHours: formatDuration(estimatedTravelHours),
+                    status: 'success',
+                    fromLocation: fromResult.resolvedCoordinates.join(','),
+                    toLocation: toResult.resolvedCoordinates.join(','),
+                    originalInputA: `${fromResult.resolvedFullLocation} (${fromResult.processingType})`,
+                    originalInputB: `${toResult.resolvedFullLocation} (${toResult.processingType})`,
+                    calculationType: 'smart_bulk_enhanced',
+                    calculatedAt: new Date().toLocaleString(),
+                    message: `Smart processing: From=${fromResult.processingType}, To=${toResult.processingType}`
+                  };
+                } else {
+                  result = {
+                    ...result,
+                    error: `Geocoding failed: From=${fromResult.error || 'OK'}, To=${toResult.error || 'OK'}`,
+                    status: 'error_calculation',
+                    originalInputA: fromResult.resolvedFullLocation || from,
+                    originalInputB: toResult.resolvedFullLocation || to
+                  };
+                }
+              } else {
+                // Basic processing
+                const routeCalcItem: RouteCalculation = { id: bulkId, locationAInput: from, locationBInput: to, travelMode, result: null, color: theme.accent1 };
+                const basicResult = await processSingleRoute(routeCalcItem);
+                result = { ...result, ...basicResult, originalInputA: from, originalInputB: to, fromLocation: basicResult.fromLocation || from, toLocation: basicResult.toLocation || to };
+              }
+            } catch (error: any) {
+              result = {
+                ...result,
+                error: `Processing error: ${error.message}`,
+                status: 'error_calculation'
+              };
+            }
           } else {
-            results[i] = { ...results[i], error: "Lokasi 'From' atau 'To' kosong.", status: 'error_calculation' };
+            result = { ...result, error: "Lokasi 'From' atau 'To' kosong.", status: 'error_calculation' };
           }
+          
+          results.push(result);
           setBulkRouteResults([...results]); 
         }
+        
+        setBulkProcessingProgress(null);
       } catch (e: any) {
         setBulkFileProcessingError(`Error memproses file massal: ${e.message}`);
+        setBulkProcessingProgress(null);
       } finally {
         setIsBulkLoading(false);
       }
     };
-    reader.onerror = () => { setBulkFileProcessingError("Error membaca file."); setIsBulkLoading(false); };
+    reader.onerror = () => { 
+      setBulkFileProcessingError("Error membaca file."); 
+      setIsBulkLoading(false); 
+      setBulkProcessingProgress(null);
+    };
     reader.readAsBinaryString(file);
-  }, [processSingleRoute, theme.accent1]);
+  }, [processSingleRoute, theme.accent1, enableSmartGeocoding, customSpeedKmh, includeTrafficFactor]);
   
   const { getRootProps: getBulkRootProps, getInputProps: getBulkInputProps, isDragActive: isBulkDragActive } = useDropzone({ onDrop: onBulkDrop, accept: { 'application/vnd.ms-excel': ['.xls'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }, maxFiles: 1, disabled: isBulkLoading });
   
@@ -517,7 +640,7 @@ export const RoutePlannerView: React.FC = () => {
             </button>
           </div>
           <div className={`${contentAnimationClasses} ${isAdvancedSettingsMinimized ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100'}`}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label htmlFor="customSpeed" className="block text-sm font-medium mb-1">Kecepatan Rata-rata (km/jam):</label>
                 <input
@@ -544,6 +667,22 @@ export const RoutePlannerView: React.FC = () => {
                 </label>
               </div>
               <div>
+                <label htmlFor="smartGeocoding" className="block text-sm font-medium mb-1">Smart Geocoding:</label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="smartGeocoding"
+                    checked={enableSmartGeocoding}
+                    onChange={(e) => setEnableSmartGeocoding(e.target.checked)}
+                    className="h-4 w-4 text-green-500 bg-gray-700 border-gray-600 rounded focus:ring-green-400"
+                  />
+                  <span className="text-sm flex items-center">
+                    <Zap size={14} className="mr-1 text-green-400" />
+                    Aktifkan AI Enhanced
+                  </span>
+                </label>
+              </div>
+              <div>
                 <label htmlFor="autoRefresh" className="block text-sm font-medium mb-1">Auto-refresh (menit, 0=off):</label>
                 <input
                   type="number"
@@ -556,6 +695,20 @@ export const RoutePlannerView: React.FC = () => {
                 />
               </div>
             </div>
+            {enableSmartGeocoding && (
+              <div className="mt-4 p-3 bg-green-900/20 border border-green-700/50 rounded-lg">
+                <h4 className="text-sm font-semibold text-green-300 mb-2 flex items-center">
+                  <Zap size={16} className="mr-2" />
+                  Smart Geocoding Aktif
+                </h4>
+                <ul className="text-xs text-green-200 space-y-1">
+                  <li>• 🎯 Auto-detect koordinat dan konversi ke alamat</li>
+                  <li>• 🔍 Pencarian lokasi terdekat untuk koordinat tidak valid</li>
+                  <li>• 🏙️ Resolusi alamat lengkap dengan nama kota dan negara</li>
+                  <li>• 🛡️ Error recovery dan fallback otomatis</li>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
@@ -610,7 +763,7 @@ export const RoutePlannerView: React.FC = () => {
                     </div>
                     <div>
                       <label htmlFor={`route${rc.id}LocationB`} className="block text-xs font-medium mb-0.5 flex items-center">
-                        <MapPinIcon size={14} className={`inline mr-1.5`} />
+                        <Target size={14} className={`inline mr-1.5`} />
                         Lokasi B (Tujuan):
                       </label>
                       <input
@@ -733,24 +886,75 @@ export const RoutePlannerView: React.FC = () => {
           </div>
         </div>
 
-        {/* Bulk Route Processing Section */}
+        {/* Enhanced Bulk Route Processing Section */}
         <div className={`panel-holographic p-4 rounded-xl shadow-xl border border-gray-700 mb-6`}>
           <div className="flex justify-between items-center mb-3 cursor-pointer" onClick={() => setIsBulkProcessingMinimized(!isBulkProcessingMinimized)}>
-            <h2 className={`text-lg font-semibold text-${theme.accent4}`}>📦 Pemrosesan Rute Massal Canggih</h2>
+            <h2 className={`text-lg font-semibold text-${theme.accent4} flex items-center`}>
+              <Zap size={20} className="mr-2" />
+              📦 Pemrosesan Rute Massal Canggih
+            </h2>
              <button className="p-1 text-gray-400 hover:text-white" aria-label={isBulkProcessingMinimized ? "Expand Bulk Processing" : "Collapse Bulk Processing"}>
               {isBulkProcessingMinimized ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
             </button>
           </div>
            <div className={`${contentAnimationClasses} ${isBulkProcessingMinimized ? 'max-h-0 opacity-0' : 'max-h-[1000px] opacity-100'}`}>
-            <div className="bg-blue-900/20 border border-blue-700/50 p-3 rounded-lg mb-4">
-              <h3 className="text-sm font-semibold text-blue-300 mb-2">🔥 Fitur Canggih Pemrosesan Massal:</h3>
-              <ul className="text-xs text-blue-200 space-y-1">
-                <li>• 🗺️ <strong>Auto-detect koordinat:</strong> Jika input adalah koordinat, otomatis mencari alamat dan nama kota</li>
-                <li>• 🎯 <strong>Smart coordinate validation:</strong> Koordinat tidak valid akan dicari titik terdekat yang valid</li>
-                <li>• 🏙️ <strong>Reverse geocoding:</strong> Koordinat diubah menjadi alamat lengkap dengan nama kota</li>
-                <li>• 🔄 <strong>Mixed input support:</strong> Bisa campuran alamat dan koordinat dalam satu file</li>
-              </ul>
+            <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/50 p-4 rounded-lg mb-4">
+              <h3 className="text-sm font-semibold text-blue-300 mb-3 flex items-center">
+                <Zap size={16} className="mr-2" />
+                🔥 Fitur Canggih Pemrosesan Massal:
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ul className="text-xs text-blue-200 space-y-1">
+                  <li className="flex items-center">
+                    <Search size={12} className="mr-2 text-green-400" />
+                    <strong>Auto-detect koordinat:</strong> Jika input adalah koordinat, otomatis mencari alamat dan nama kota
+                  </li>
+                  <li className="flex items-center">
+                    <Target size={12} className="mr-2 text-yellow-400" />
+                    <strong>Smart coordinate validation:</strong> Koordinat tidak valid akan dicari titik terdekat yang valid
+                  </li>
+                  <li className="flex items-center">
+                    <MapPin size={12} className="mr-2 text-cyan-400" />
+                    <strong>Reverse geocoding:</strong> Koordinat diubah menjadi alamat lengkap dengan nama kota
+                  </li>
+                </ul>
+                <ul className="text-xs text-blue-200 space-y-1">
+                  <li className="flex items-center">
+                    <Route size={12} className="mr-2 text-purple-400" />
+                    <strong>Mixed input support:</strong> Bisa campuran alamat dan koordinat dalam satu file
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle size={12} className="mr-2 text-green-400" />
+                    <strong>Error recovery:</strong> Sistem otomatis mencoba alternatif jika geocoding gagal
+                  </li>
+                  <li className="flex items-center">
+                    <Info size={12} className="mr-2 text-orange-400" />
+                    <strong>Progress tracking:</strong> Monitor real-time pemrosesan setiap rute
+                  </li>
+                </ul>
+              </div>
             </div>
+
+            {/* Progress indicator */}
+            {bulkProcessingProgress && (
+              <div className="mb-4 p-3 bg-purple-900/20 border border-purple-700/50 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-purple-300">
+                    Memproses Rute: {bulkProcessingProgress.current} / {bulkProcessingProgress.total}
+                  </span>
+                  <span className="text-xs text-purple-400">
+                    {Math.round((bulkProcessingProgress.current / bulkProcessingProgress.total) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(bulkProcessingProgress.current / bulkProcessingProgress.total) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end items-center mb-2">
               <button 
                 onClick={handleExportBulkRoutes} 
@@ -767,6 +971,12 @@ export const RoutePlannerView: React.FC = () => {
                     <UploadCloud size={32} className={`mx-auto mb-2 ${isBulkDragActive ? `text-blue-400` : `text-gray-400`}`} />
                     <p className="text-sm">{isBulkDragActive ? "📁 Letakkan file di sini..." : "📁 Seret & lepas file Excel, atau klik"}</p>
                     <p className="text-xs opacity-60">(.xlsx, .xls) - Mendukung alamat dan koordinat</p>
+                    {enableSmartGeocoding && (
+                      <div className="mt-2 px-2 py-1 bg-green-600/20 text-green-300 text-xs rounded-full inline-flex items-center">
+                        <Zap size={10} className="mr-1" />
+                        Smart Processing Aktif
+                      </div>
+                    )}
                 </div>
                 <button 
                   onClick={handleDownloadTemplate} 
@@ -805,8 +1015,8 @@ export const RoutePlannerView: React.FC = () => {
                         <tbody>
                           {bulkRouteResults.map(res => (
                             <tr key={res.id} className={`border-b border-gray-700 last:border-b-0 hover:bg-gray-700/30`}>
-                                <td className="p-1.5 truncate max-w-[100px]" title={res.originalInputA}>{res.originalInputA}</td>
-                                <td className="p-1.5 truncate max-w-[100px]" title={res.originalInputB}>{res.originalInputB}</td>
+                                <td className="p-1.5 truncate max-w-[120px]" title={res.originalInputA}>{res.originalInputA}</td>
+                                <td className="p-1.5 truncate max-w-[120px]" title={res.originalInputB}>{res.originalInputB}</td>
                                 <td className="p-1.5">{travelModeIcon(res.travelMode || 'DRIVING')}{res.travelMode || 'N/A'}</td>
                                 <td className="p-1.5">{res.straightLineDistanceKm || '-'}</td>
                                 <td className="p-1.5">{res.estimatedTravelDurationHours || '-'}</td>
