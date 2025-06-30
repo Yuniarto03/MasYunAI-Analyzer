@@ -7,14 +7,16 @@ import {
     DockItemConfig, 
     SidebarItemConfig, 
     SidebarSectionConfig, 
-    PivotTheme 
+    PivotTheme,
+    CountryInfo,
+    TravelMode
 } from './types';
 
 
 // Example Icons (replace with actual SVGs or a library like Heroicons)
 const WelcomeIcon: IconType = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 22.5l-.648-1.938a2.25 2.25 0 01-1.473-1.473L12 18.75l1.938-.648a2.25 2.25 0 011.473-1.473L17.75 15l.648 1.938a2.25 2.25 0 011.473 1.473L22.5 18.75l-1.938.648a2.25 2.25 0 01-1.473 1.473z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
     </svg>
 );
 const HomeIcon: IconType = ({ className }) => (
@@ -94,30 +96,6 @@ const RouteIcon: IconType = ({ className }) => (
     </svg>
 );
 
-const DocumentIcon: IconType = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-    </svg>
-);
-
-const FolderIcon: IconType = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25H11.69z" />
-    </svg>
-);
-
-const SaveIcon: IconType = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-    </svg>
-);
-
-const ExportIcon: IconType = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-    </svg>
-);
-
 
 export const CheckCircleIcon: IconType = ({ className }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -150,7 +128,7 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     ]
   },
   {
-    title: "Analysis Tools",
+    title: "Analysis Tools", // Renamed for clarity
     items: [
         { name: "Data Explorer", icon: TableIcon, viewId: 'dataTable'},
         { name: "Visualizations", icon: ChartIcon, viewId: 'visualizations'},
@@ -204,8 +182,7 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
             { name: "Pivot Tables", viewId: 'pivotTable' },
             { name: "Visualizations", viewId: 'visualizations' },
             { name: "Route Planner", viewId: 'routePlanner' },
-            { name: "AI Assistant", viewId: 'aiAssistant' },
-            { name: "Settings", viewId: 'settings' }
+            { name: "AI Assistant", viewId: 'aiAssistant' } 
         ]
     },
     {
@@ -310,4 +287,38 @@ export const RAW_COLOR_VALUES: Record<string, string> = {
   'amber-500': '#f59e0b',
   'lime-500': '#84cc16',
   'violet-500': '#8b5cf6',
+};
+
+// --- NEW: Route Planner Constants ---
+export const COUNTRIES_DATA: CountryInfo[] = [
+  { code: 'ID', name: 'Indonesia' },
+  { code: 'MY', name: 'Malaysia' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'TH', name: 'Thailand' },
+  { code: 'VN', name: 'Vietnam' },
+  { code: 'PH', name: 'Philippines' },
+  { code: 'US', name: 'United States' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'CN', name: 'China' },
+  { code: 'IN', name: 'India' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'BR', name: 'Brazil' }
+];
+
+export const AVERAGE_TRAVEL_SPEED_KMH = 60; // Average speed for straight-line calculations
+
+export const TRAVEL_MODES: { value: TravelMode; label: string }[] = [
+  { value: 'DRIVING', label: 'Driving' },
+  { value: 'WALKING', label: 'Walking' },
+  { value: 'CYCLING', label: 'Cycling' }
+];
+
+export const HEURISTIC_TRAVEL_FACTORS: Record<TravelMode, number> = {
+  DRIVING: 1.4, // Roads are typically 40% longer than straight line
+  WALKING: 1.2, // Walking paths are typically 20% longer
+  CYCLING: 1.3  // Cycling routes are typically 30% longer
 };

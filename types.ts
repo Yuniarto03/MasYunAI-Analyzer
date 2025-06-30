@@ -312,3 +312,54 @@ export interface DiagramTheme {
     edge: { stroke: string; labelColor: string };
     canvas: { backgroundColor: string; gridColor: string };
 }
+
+// --- NEW TYPES FOR ROUTE PLANNER ---
+export type LatLngTuple = [number, number];
+
+export type TravelMode = 'DRIVING' | 'WALKING' | 'CYCLING';
+
+export interface CountryInfo {
+  code: string;
+  name: string;
+}
+
+export interface RouteResult {
+  straightLineDistanceKm: string | null;
+  straightLineDurationHours: string | null;
+  estimatedTravelDurationHours: string | null;
+  travelMode: TravelMode;
+  error: string | null;
+  calculationType: string | null;
+  status: 'pending' | 'success' | 'error_geocoding_A' | 'error_geocoding_B' | 'error_both_geocoding' | 'error_calculation';
+  fromLocation?: string;
+  toLocation?: string;
+  calculatedAt?: string;
+  originalInputA?: string;
+  originalInputB?: string;
+  message?: string;
+}
+
+export interface RouteCalculation {
+  id: string;
+  locationAInput: string;
+  locationBInput: string;
+  travelMode: TravelMode;
+  result: RouteResult | null;
+  color: string;
+  aiRouteAnalysis?: string | null;
+  isAiRouteAnalysisLoading?: boolean;
+}
+
+export interface BulkRouteResultItem extends RouteResult {
+  id: string;
+  originalInputA: string;
+  originalInputB: string;
+}
+
+// --- APP CONTEXT TYPE ---
+export interface AppContextType {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  reduceMotion: boolean;
+  setReduceMotion: (reduce: boolean) => void;
+}

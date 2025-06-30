@@ -25,6 +25,7 @@ import RoutePlannerPage from './RoutePlannerPage';
 import { DOCK_ITEMS, NAV_MENU_ITEMS, SIDEBAR_SECTIONS } from './constants';
 import { IconType, ViewKey, Theme } from './types'; 
 import { DataProvider } from './contexts/DataContext';
+import { AppProvider, AppContext } from './contexts/AppContext';
 
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewKey>('welcome');
@@ -33,6 +34,8 @@ const AppContent: React.FC = () => {
   const [showFeaturesModal, setShowFeaturesModal] = useState(false);
   const [genericFeatureName, setGenericFeatureName] = useState("Selected");
   const [isDockVisible, setIsDockVisible] = useState(true);
+
+  const { theme, reduceMotion } = useContext(AppContext);
 
   const handleViewChange = useCallback((viewKey: ViewKey) => {
     setActiveView(viewKey);
@@ -105,20 +108,12 @@ const AppContent: React.FC = () => {
   }));
   
   const isGenericViewActive = !mainViews.includes(activeView);
-
-  const defaultTheme: Theme = {
-    accent1: 'blue-400',
-    accent2: 'purple-500',
-    accent3: 'green-400',
-    accent4: 'yellow-400',
-    darkBg: 'gray-900'
-  };
   
   const isDiagramOrWelcome = activeView === 'welcome' || activeView === 'diagrammingMatrix';
   
   return (
     <div className="relative h-screen flex flex-col overflow-hidden">
-      <FuturisticBackground theme={defaultTheme} reduceMotion={false} />
+      <FuturisticBackground theme={theme} reduceMotion={reduceMotion} />
       <Navbar 
         onToggleSidebar={toggleSidebar} 
         isSidebarOpen={isSidebarOpen}
@@ -148,8 +143,8 @@ const AppContent: React.FC = () => {
           <div style={{ display: activeView === 'about' ? 'block' : 'none' }}><AboutView /></div>
           <div style={{ display: activeView === 'statisticalAnalysis' ? 'block' : 'none' }}><StatisticalAnalysisView /></div>
           <div style={{ display: activeView === 'workflow' ? 'block' : 'none' }}><WorkflowView /></div>
-          <div style={{ display: activeView === 'routePlanner' ? 'block' : 'none' }}><RoutePlannerPage /></div>
           <div style={{ display: activeView === 'diagrammingMatrix' ? 'flex' : 'none', height: '100%' }}><DiagrammingMatrixView onNavigate={handleViewChange} /></div>
+          <div style={{ display: activeView === 'routePlanner' ? 'block' : 'none' }}><RoutePlannerPage /></div>
           <div style={{ display: isGenericViewActive ? 'block' : 'none' }}><GenericPlaceholderView featureName={genericFeatureName} /></div>
         </main>
       </div>
@@ -182,9 +177,11 @@ const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <DataProvider>
-      <AppContent />
-    </DataProvider>
+    <AppProvider>
+      <DataProvider>
+        <AppContent />
+      </DataProvider>
+    </AppProvider>
   );
 }
 
