@@ -5,6 +5,7 @@
 import { GoogleGenAI, GenerateContentResponse, GenerateContentParameters } from '@google/genai';
 import { MODEL_TEXT } from '../constants';
 import { marked } from 'marked'; // Using a proper markdown parser for safety and features
+import { LatLngTuple } from '../types';
 
 let ai: GoogleGenAI | null = null;
 
@@ -356,6 +357,112 @@ Example JSON Response:
     }
 };
 
+// --- NEW: Route Planner Functions ---
+
+export const geocodeAddressWithGemini = async (address: string): Promise<LatLngTuple | { error: string }> => {
+    try {
+        const client = getClient();
+        const prompt = `Convert this address to latitude and longitude coordinates: "${address}". 
+        Respond ONLY with the coordinates in the format: latitude,longitude (e.g., -6.2088,106.8456).
+        If you cannot determine the coordinates, respond with "ERROR: Unable to geocode address".`;
+        
+        const response = await client.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: {
+                temperature: 0.1, // Very low temperature for factual responses
+            }
+        });
+        
+        const text = response.text.trim();
+        
+        if (text.startsWith('ERROR:')) {
+            return { error: text.replace('ERROR:', '').trim() };
+        }
+        
+        const coords = text.split(',').map(coord => parseFloat(coord.trim()));
+        if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+            return [coords[0], coords[1]];
+        }
+        
+        return { error: 'Invalid coordinate format received from AI' };
+    } catch (error) {
+        console.error('Error geocoding with Gemini:', error);
+        return { error: 'Failed to geocode address' };
+    }
+};
+
+export const getRouteAnalysisForDisplay = async (
+    fromLocation: string,
+    toLocation: string,
+    distance: string | null,
+    duration: string | null,
+    travelMode: string,
+    country: string
+): Promise<string> => {
+    try {
+        const client = getClient();
+        const prompt = `Provide a brief route analysis for travel in ${country}:
+        From: ${fromLocation}
+        To: ${toLocation}
+        Distance: ${distance || 'Unknown'}
+        Estimated Duration: ${duration || 'Unknown'}
+        Travel Mode: ${travelMode}
+        
+        Provide insights about:
+        - Route characteristics and terrain
+        - Traffic considerations
+        - Best travel times
+        - Alternative transportation options
+        - Local travel tips
+        
+        Keep response under 150 words and use markdown formatting.`;
+        
+        const response = await client.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: {
+                temperature: 0.7,
+            }
+        });
+        
+        return response.text;
+    } catch (error) {
+        console.error('Error getting route analysis:', error);
+        return 'Unable to generate route analysis at this time.';
+    }
+};
+
+export const analyzeTextWithGemini = async (
+    prompt: string,
+    context?: string,
+    responseType: 'text' | 'json' = 'text'
+): Promise<{ type: 'text' | 'error'; content: string }> => {
+    try {
+        const client = getClient();
+        let fullPrompt = prompt;
+        if (context) {
+            fullPrompt = `Context: ${context}\n\nQuery: ${prompt}`;
+        }
+        
+        const response = await client.models.generateContent({
+            model: MODEL_TEXT,
+            contents: fullPrompt,
+            config: {
+                temperature: 0.6,
+                responseMimeType: responseType === 'json' ? 'application/json' : undefined,
+            }
+        });
+        
+        return { type: 'text', content: response.text };
+    } catch (error) {
+        console.error('Error analyzing text with Gemini:', error);
+        return { 
+            type: 'error', 
+            content: error instanceof Error ? error.message : 'Unknown error occurred' 
+        };
+    }
+};
 
 // You could add functions for image generation, specific data analysis prompts, etc.
 // For example:
