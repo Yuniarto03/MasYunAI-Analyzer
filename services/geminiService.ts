@@ -415,174 +415,213 @@ Example JSON Response:
 // --- NEW: Enhanced Route Planner Functions ---
 
 export const geocodeAddressWithGemini = async (address: string): Promise<LatLngTuple | { error: string }> => {
-    return retryWithBackoff(async () => {
-        try {
-            const client = getClient();
-            const prompt = `Convert this address to latitude and longitude coordinates: "${address}". 
-            Respond ONLY with the coordinates in the format: latitude,longitude (e.g., -6.2088,106.8456).
-            If you cannot determine the coordinates, respond with "ERROR: Unable to geocode address".`;
-            
-            const response = await client.models.generateContent({
-                model: MODEL_TEXT,
-                contents: prompt,
-                config: {
-                    temperature: 0.1, // Very low temperature for factual responses
+    try {
+        return await retryWithBackoff(async () => {
+            try {
+                const client = getClient();
+                const prompt = `Convert this address to latitude and longitude coordinates: "${address}". 
+                Respond ONLY with the coordinates in the format: latitude,longitude (e.g., -6.2088,106.8456).
+                If you cannot determine the coordinates, respond with "ERROR: Unable to geocode address".`;
+                
+                const response = await client.models.generateContent({
+                    model: MODEL_TEXT,
+                    contents: prompt,
+                    config: {
+                        temperature: 0.1, // Very low temperature for factual responses
+                    }
+                });
+                
+                const text = response.text.trim();
+                
+                if (text.startsWith('ERROR:')) {
+                    return { error: text.replace('ERROR:', '').trim() };
                 }
-            });
-            
-            const text = response.text.trim();
-            
-            if (text.startsWith('ERROR:')) {
-                return { error: text.replace('ERROR:', '').trim() };
+                
+                const coords = text.split(',').map(coord => parseFloat(coord.trim()));
+                if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                    return [coords[0], coords[1]];
+                }
+                
+                return { error: 'Invalid coordinate format received from AI' };
+            } catch (error) {
+                console.error('Error geocoding with Gemini:', error);
+                throw error; // Re-throw for retry mechanism
             }
-            
-            const coords = text.split(',').map(coord => parseFloat(coord.trim()));
-            if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-                return [coords[0], coords[1]];
-            }
-            
-            return { error: 'Invalid coordinate format received from AI' };
-        } catch (error) {
-            console.error('Error geocoding with Gemini:', error);
-            throw error; // Re-throw for retry mechanism
-        }
-    }).catch(error => {
+        });
+    } catch (error: any) {
         console.error('Final geocoding error after retries:', error);
-        return { error: 'Failed to geocode address after multiple attempts. Please try again later.' };
-    });
+        
+        // Check if it's a quota error and provide user-friendly message
+        const isQuotaError = error?.error?.code === 429 || 
+                            error?.error?.status === 'RESOURCE_EXHAUSTED' ||
+                            error?.message?.includes('quota') ||
+                            error?.message?.includes('rate limit');
+        
+        if (isQuotaError) {
+            return { error: 'API quota exceeded. Please try again later or check your API plan.' };
+        }
+        
+        return { error: 'Failed to geocode address. Please try again later.' };
+    }
 };
 
 export const reverseGeocodeWithGemini = async (lat: number, lng: number): Promise<{ address: string; city: string; country: string; fullLocation: string } | { error: string }> => {
-    return retryWithBackoff(async () => {
-        try {
-            const client = getClient();
-            const prompt = `Convert these coordinates to a readable address and location information: ${lat}, ${lng}
-            
-            Respond in this exact format:
-            ADDRESS: [full street address or landmark name]
-            CITY: [city name]
-            COUNTRY: [country name]
-            FULL_LOCATION: [complete location description including city and country]
-            
-            If you cannot determine the location, respond with:
-            ERROR: Unable to reverse geocode coordinates
-            
-            Example response:
-            ADDRESS: Jalan Sudirman No. 1
-            CITY: Jakarta
-            COUNTRY: Indonesia
-            FULL_LOCATION: Jakarta, Indonesia`;
-            
-            const response = await client.models.generateContent({
-                model: MODEL_TEXT,
-                contents: prompt,
-                config: {
-                    temperature: 0.1,
-                }
-            });
-            
-            const text = response.text.trim();
-            
-            if (text.startsWith('ERROR:')) {
-                return { error: text.replace('ERROR:', '').trim() };
-            }
-            
-            const addressMatch = text.match(/ADDRESS:\s*(.+)/);
-            const cityMatch = text.match(/CITY:\s*(.+)/);
-            const countryMatch = text.match(/COUNTRY:\s*(.+)/);
-            const fullLocationMatch = text.match(/FULL_LOCATION:\s*(.+)/);
-            
-            if (addressMatch && cityMatch && countryMatch && fullLocationMatch) {
-                return {
-                    address: addressMatch[1].trim(),
-                    city: cityMatch[1].trim(),
-                    country: countryMatch[1].trim(),
-                    fullLocation: fullLocationMatch[1].trim()
-                };
-            }
-            
-            return { error: 'Invalid response format from AI' };
-        } catch (error) {
-            console.error('Error reverse geocoding with Gemini:', error);
-            throw error; // Re-throw for retry mechanism
-        }
-    }).catch(error => {
-        console.error('Final reverse geocoding error after retries:', error);
-        return { error: 'Failed to reverse geocode coordinates after multiple attempts. Please try again later.' };
-    });
-};
-
-export const findNearestValidCoordinates = async (lat: number, lng: number): Promise<{ coordinates: LatLngTuple; address: string; city: string; country: string; fullLocation: string; distance: string } | { error: string }> => {
-    return retryWithBackoff(async () => {
-        try {
-            const client = getClient();
-            const prompt = `The coordinates ${lat}, ${lng} appear to be invalid or in an inaccessible location (possibly in the ocean, desert, or restricted area). 
-            Find the nearest valid, accessible, populated location (like a nearby city, town, landmark, or populated area) and provide:
-            
-            COORDINATES: [latitude,longitude]
-            ADDRESS: [readable address or landmark name]
-            CITY: [city name]
-            COUNTRY: [country name]
-            FULL_LOCATION: [complete location description]
-            DISTANCE: [approximate distance from original coordinates, e.g., "15 km away"]
-            
-            If you cannot find a suitable nearby location, respond with:
-            ERROR: No valid nearby location found
-            
-            Example response:
-            COORDINATES: -6.2088,106.8456
-            ADDRESS: Jakarta City Center
-            CITY: Jakarta
-            COUNTRY: Indonesia
-            FULL_LOCATION: Jakarta, Indonesia
-            DISTANCE: 25 km away`;
-            
-            const response = await client.models.generateContent({
-                model: MODEL_TEXT,
-                contents: prompt,
-                config: {
-                    temperature: 0.2,
-                }
-            });
-            
-            const text = response.text.trim();
-            
-            if (text.startsWith('ERROR:')) {
-                return { error: text.replace('ERROR:', '').trim() };
-            }
-            
-            const coordsMatch = text.match(/COORDINATES:\s*([^,]+),\s*(.+)/);
-            const addressMatch = text.match(/ADDRESS:\s*(.+)/);
-            const cityMatch = text.match(/CITY:\s*(.+)/);
-            const countryMatch = text.match(/COUNTRY:\s*(.+)/);
-            const fullLocationMatch = text.match(/FULL_LOCATION:\s*(.+)/);
-            const distanceMatch = text.match(/DISTANCE:\s*(.+)/);
-            
-            if (coordsMatch && addressMatch && cityMatch && countryMatch && fullLocationMatch) {
-                const newLat = parseFloat(coordsMatch[1].trim());
-                const newLng = parseFloat(coordsMatch[2].trim());
+    try {
+        return await retryWithBackoff(async () => {
+            try {
+                const client = getClient();
+                const prompt = `Convert these coordinates to a readable address and location information: ${lat}, ${lng}
                 
-                if (!isNaN(newLat) && !isNaN(newLng)) {
+                Respond in this exact format:
+                ADDRESS: [full street address or landmark name]
+                CITY: [city name]
+                COUNTRY: [country name]
+                FULL_LOCATION: [complete location description including city and country]
+                
+                If you cannot determine the location, respond with:
+                ERROR: Unable to reverse geocode coordinates
+                
+                Example response:
+                ADDRESS: Jalan Sudirman No. 1
+                CITY: Jakarta
+                COUNTRY: Indonesia
+                FULL_LOCATION: Jakarta, Indonesia`;
+                
+                const response = await client.models.generateContent({
+                    model: MODEL_TEXT,
+                    contents: prompt,
+                    config: {
+                        temperature: 0.1,
+                    }
+                });
+                
+                const text = response.text.trim();
+                
+                if (text.startsWith('ERROR:')) {
+                    return { error: text.replace('ERROR:', '').trim() };
+                }
+                
+                const addressMatch = text.match(/ADDRESS:\s*(.+)/);
+                const cityMatch = text.match(/CITY:\s*(.+)/);
+                const countryMatch = text.match(/COUNTRY:\s*(.+)/);
+                const fullLocationMatch = text.match(/FULL_LOCATION:\s*(.+)/);
+                
+                if (addressMatch && cityMatch && countryMatch && fullLocationMatch) {
                     return {
-                        coordinates: [newLat, newLng],
                         address: addressMatch[1].trim(),
                         city: cityMatch[1].trim(),
                         country: countryMatch[1].trim(),
-                        fullLocation: fullLocationMatch[1].trim(),
-                        distance: distanceMatch ? distanceMatch[1].trim() : 'Unknown distance'
+                        fullLocation: fullLocationMatch[1].trim()
                     };
                 }
+                
+                return { error: 'Invalid response format from AI' };
+            } catch (error) {
+                console.error('Error reverse geocoding with Gemini:', error);
+                throw error; // Re-throw for retry mechanism
             }
-            
-            return { error: 'Invalid response format from AI' };
-        } catch (error) {
-            console.error('Error finding nearest valid coordinates:', error);
-            throw error; // Re-throw for retry mechanism
+        });
+    } catch (error: any) {
+        console.error('Final reverse geocoding error after retries:', error);
+        
+        // Check if it's a quota error and provide user-friendly message
+        const isQuotaError = error?.error?.code === 429 || 
+                            error?.error?.status === 'RESOURCE_EXHAUSTED' ||
+                            error?.message?.includes('quota') ||
+                            error?.message?.includes('rate limit');
+        
+        if (isQuotaError) {
+            return { error: 'API quota exceeded. Please try again later or check your API plan.' };
         }
-    }).catch(error => {
+        
+        return { error: 'Failed to reverse geocode coordinates. Please try again later.' };
+    }
+};
+
+export const findNearestValidCoordinates = async (lat: number, lng: number): Promise<{ coordinates: LatLngTuple; address: string; city: string; country: string; fullLocation: string; distance: string } | { error: string }> => {
+    try {
+        return await retryWithBackoff(async () => {
+            try {
+                const client = getClient();
+                const prompt = `The coordinates ${lat}, ${lng} appear to be invalid or in an inaccessible location (possibly in the ocean, desert, or restricted area). 
+                Find the nearest valid, accessible, populated location (like a nearby city, town, landmark, or populated area) and provide:
+                
+                COORDINATES: [latitude,longitude]
+                ADDRESS: [readable address or landmark name]
+                CITY: [city name]
+                COUNTRY: [country name]
+                FULL_LOCATION: [complete location description]
+                DISTANCE: [approximate distance from original coordinates, e.g., "15 km away"]
+                
+                If you cannot find a suitable nearby location, respond with:
+                ERROR: No valid nearby location found
+                
+                Example response:
+                COORDINATES: -6.2088,106.8456
+                ADDRESS: Jakarta City Center
+                CITY: Jakarta
+                COUNTRY: Indonesia
+                FULL_LOCATION: Jakarta, Indonesia
+                DISTANCE: 25 km away`;
+                
+                const response = await client.models.generateContent({
+                    model: MODEL_TEXT,
+                    contents: prompt,
+                    config: {
+                        temperature: 0.2,
+                    }
+                });
+                
+                const text = response.text.trim();
+                
+                if (text.startsWith('ERROR:')) {
+                    return { error: text.replace('ERROR:', '').trim() };
+                }
+                
+                const coordsMatch = text.match(/COORDINATES:\s*([^,]+),\s*(.+)/);
+                const addressMatch = text.match(/ADDRESS:\s*(.+)/);
+                const cityMatch = text.match(/CITY:\s*(.+)/);
+                const countryMatch = text.match(/COUNTRY:\s*(.+)/);
+                const fullLocationMatch = text.match(/FULL_LOCATION:\s*(.+)/);
+                const distanceMatch = text.match(/DISTANCE:\s*(.+)/);
+                
+                if (coordsMatch && addressMatch && cityMatch && countryMatch && fullLocationMatch) {
+                    const newLat = parseFloat(coordsMatch[1].trim());
+                    const newLng = parseFloat(coordsMatch[2].trim());
+                    
+                    if (!isNaN(newLat) && !isNaN(newLng)) {
+                        return {
+                            coordinates: [newLat, newLng],
+                            address: addressMatch[1].trim(),
+                            city: cityMatch[1].trim(),
+                            country: countryMatch[1].trim(),
+                            fullLocation: fullLocationMatch[1].trim(),
+                            distance: distanceMatch ? distanceMatch[1].trim() : 'Unknown distance'
+                        };
+                    }
+                }
+                
+                return { error: 'Invalid response format from AI' };
+            } catch (error) {
+                console.error('Error finding nearest valid coordinates:', error);
+                throw error; // Re-throw for retry mechanism
+            }
+        });
+    } catch (error: any) {
         console.error('Final nearest coordinates error after retries:', error);
-        return { error: 'Failed to find nearest valid location after multiple attempts. Please try again later.' };
-    });
+        
+        // Check if it's a quota error and provide user-friendly message
+        const isQuotaError = error?.error?.code === 429 || 
+                            error?.error?.status === 'RESOURCE_EXHAUSTED' ||
+                            error?.message?.includes('quota') ||
+                            error?.message?.includes('rate limit');
+        
+        if (isQuotaError) {
+            return { error: 'API quota exceeded. Please try again later or check your API plan.' };
+        }
+        
+        return { error: 'Failed to find nearest valid location. Please try again later.' };
+    }
 };
 
 export const enhancedBulkGeocoding = async (input: string, isCoordinate: boolean = false): Promise<{
@@ -596,86 +635,99 @@ export const enhancedBulkGeocoding = async (input: string, isCoordinate: boolean
     additionalInfo?: string;
     error?: string;
 }> => {
-    return retryWithBackoff(async () => {
-        try {
-            const result = {
-                originalInput: input,
-                resolvedCoordinates: null as LatLngTuple | null,
-                resolvedAddress: '',
-                resolvedCity: '',
-                resolvedCountry: '',
-                resolvedFullLocation: '',
-                processingType: 'failed' as const,
-                additionalInfo: '',
-                error: ''
-            };
+    try {
+        return await retryWithBackoff(async () => {
+            try {
+                const result = {
+                    originalInput: input,
+                    resolvedCoordinates: null as LatLngTuple | null,
+                    resolvedAddress: '',
+                    resolvedCity: '',
+                    resolvedCountry: '',
+                    resolvedFullLocation: '',
+                    processingType: 'failed' as const,
+                    additionalInfo: '',
+                    error: ''
+                };
 
-            if (isCoordinate) {
-                // Input is coordinates - try to get address
-                const coords = input.split(',').map(c => parseFloat(c.trim()));
-                if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-                    result.resolvedCoordinates = [coords[0], coords[1]];
-                    
-                    // Try reverse geocoding
-                    const reverseResult = await reverseGeocodeWithGemini(coords[0], coords[1]);
-                    if (reverseResult && !('error' in reverseResult)) {
-                        result.resolvedAddress = reverseResult.address;
-                        result.resolvedCity = reverseResult.city;
-                        result.resolvedCountry = reverseResult.country;
-                        result.resolvedFullLocation = reverseResult.fullLocation;
-                        result.processingType = 'coordinate_to_address';
-                        result.additionalInfo = 'Successfully converted coordinates to address';
-                    } else {
-                        // Try to find nearest valid coordinates
-                        const nearestResult = await findNearestValidCoordinates(coords[0], coords[1]);
-                        if (nearestResult && !('error' in nearestResult)) {
-                            result.resolvedCoordinates = nearestResult.coordinates;
-                            result.resolvedAddress = nearestResult.address;
-                            result.resolvedCity = nearestResult.city;
-                            result.resolvedCountry = nearestResult.country;
-                            result.resolvedFullLocation = nearestResult.fullLocation;
-                            result.processingType = 'nearest_valid_found';
-                            result.additionalInfo = `Found nearest valid location: ${nearestResult.distance}`;
+                if (isCoordinate) {
+                    // Input is coordinates - try to get address
+                    const coords = input.split(',').map(c => parseFloat(c.trim()));
+                    if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                        result.resolvedCoordinates = [coords[0], coords[1]];
+                        
+                        // Try reverse geocoding
+                        const reverseResult = await reverseGeocodeWithGemini(coords[0], coords[1]);
+                        if (reverseResult && !('error' in reverseResult)) {
+                            result.resolvedAddress = reverseResult.address;
+                            result.resolvedCity = reverseResult.city;
+                            result.resolvedCountry = reverseResult.country;
+                            result.resolvedFullLocation = reverseResult.fullLocation;
+                            result.processingType = 'coordinate_to_address';
+                            result.additionalInfo = 'Successfully converted coordinates to address';
                         } else {
-                            result.error = 'Could not resolve coordinates to address or find nearest valid location';
-                            result.resolvedAddress = `Coordinates: ${coords[0]}, ${coords[1]}`;
-                            result.resolvedFullLocation = `Unknown Location (${coords[0]}, ${coords[1]})`;
+                            // Try to find nearest valid coordinates
+                            const nearestResult = await findNearestValidCoordinates(coords[0], coords[1]);
+                            if (nearestResult && !('error' in nearestResult)) {
+                                result.resolvedCoordinates = nearestResult.coordinates;
+                                result.resolvedAddress = nearestResult.address;
+                                result.resolvedCity = nearestResult.city;
+                                result.resolvedCountry = nearestResult.country;
+                                result.resolvedFullLocation = nearestResult.fullLocation;
+                                result.processingType = 'nearest_valid_found';
+                                result.additionalInfo = `Found nearest valid location: ${nearestResult.distance}`;
+                            } else {
+                                result.error = 'Could not resolve coordinates to address or find nearest valid location';
+                                result.resolvedAddress = `Coordinates: ${coords[0]}, ${coords[1]}`;
+                                result.resolvedFullLocation = `Unknown Location (${coords[0]}, ${coords[1]})`;
+                            }
                         }
+                    } else {
+                        result.error = 'Invalid coordinate format';
                     }
                 } else {
-                    result.error = 'Invalid coordinate format';
-                }
-            } else {
-                // Input is address - try to get coordinates
-                const geocodeResult = await geocodeAddressWithGemini(input);
-                if (geocodeResult && !('error' in geocodeResult)) {
-                    result.resolvedCoordinates = geocodeResult;
-                    result.resolvedAddress = input;
-                    result.resolvedFullLocation = input;
-                    result.processingType = 'address_to_coordinate';
-                    result.additionalInfo = 'Successfully converted address to coordinates';
-                    
-                    // Try to get more detailed location info
-                    const reverseResult = await reverseGeocodeWithGemini(geocodeResult[0], geocodeResult[1]);
-                    if (reverseResult && !('error' in reverseResult)) {
-                        result.resolvedCity = reverseResult.city;
-                        result.resolvedCountry = reverseResult.country;
-                        result.resolvedFullLocation = reverseResult.fullLocation;
+                    // Input is address - try to get coordinates
+                    const geocodeResult = await geocodeAddressWithGemini(input);
+                    if (geocodeResult && !('error' in geocodeResult)) {
+                        result.resolvedCoordinates = geocodeResult;
+                        result.resolvedAddress = input;
+                        result.resolvedFullLocation = input;
+                        result.processingType = 'address_to_coordinate';
+                        result.additionalInfo = 'Successfully converted address to coordinates';
+                        
+                        // Try to get more detailed location info
+                        const reverseResult = await reverseGeocodeWithGemini(geocodeResult[0], geocodeResult[1]);
+                        if (reverseResult && !('error' in reverseResult)) {
+                            result.resolvedCity = reverseResult.city;
+                            result.resolvedCountry = reverseResult.country;
+                            result.resolvedFullLocation = reverseResult.fullLocation;
+                        }
+                    } else {
+                        result.error = 'Could not geocode address';
+                        result.resolvedAddress = input;
+                        result.resolvedFullLocation = input;
                     }
-                } else {
-                    result.error = 'Could not geocode address';
-                    result.resolvedAddress = input;
-                    result.resolvedFullLocation = input;
                 }
-            }
 
-            return result;
-        } catch (error) {
-            console.error('Error in enhanced bulk geocoding:', error);
-            throw error;
-        }
-    }).catch(error => {
+                return result;
+            } catch (error) {
+                console.error('Error in enhanced bulk geocoding:', error);
+                throw error;
+            }
+        });
+    } catch (error: any) {
         console.error('Final enhanced bulk geocoding error after retries:', error);
+        
+        // Check if it's a quota error and provide user-friendly message
+        const isQuotaError = error?.error?.code === 429 || 
+                            error?.error?.status === 'RESOURCE_EXHAUSTED' ||
+                            error?.message?.includes('quota') ||
+                            error?.message?.includes('rate limit');
+        
+        const errorMessage = isQuotaError ? 
+            'API quota exceeded. Please try again later or check your API plan.' :
+            'Failed to process location after multiple attempts. Please try again later.';
+        
         return {
             originalInput: input,
             resolvedCoordinates: null,
@@ -684,9 +736,9 @@ export const enhancedBulkGeocoding = async (input: string, isCoordinate: boolean
             resolvedCountry: '',
             resolvedFullLocation: input,
             processingType: 'failed' as const,
-            error: 'Failed to process location after multiple attempts. Please try again later.'
+            error: errorMessage
         };
-    });
+    }
 };
 
 export const getRouteAnalysisForDisplay = async (
