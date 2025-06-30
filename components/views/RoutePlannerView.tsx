@@ -3,88 +3,16 @@ import { useDropzone, FileWithPath } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { AppContext } from '../../contexts/AppContext';
 import { AppContextType, RouteResult, CountryInfo, RouteCalculation, BulkRouteResultItem, LatLngTuple, TravelMode } from '../../types';
-import { Panel } from '../Panel';
 import { RAW_COLOR_VALUES, COUNTRIES_DATA, AVERAGE_TRAVEL_SPEED_KMH, TRAVEL_MODES, HEURISTIC_TRAVEL_FACTORS } from '../../constants';
-import { MapPin, Navigation, AlertTriangle, CheckCircle, Calculator, Route, Info, Download, UploadCloud, Trash2, Clock, PlusCircle, Brain, Play, ChevronDown, ChevronUp, Car, PersonStanding, Bike, Globe, Zap, TrendingUp, FileText, Settings, RefreshCw } from 'lucide-react';
-import { geocodeAddressWithGemini, getRouteAnalysisForDisplay, analyzeTextWithGemini } from '../../services/geminiService';
+import { MapPin, Navigation, AlertTriangle, CheckCircle, Calculator, Route, Info, Download, UploadCloud, Trash2, Clock, PlusCircle, Brain, Play, ChevronDown, ChevronUp, Bike, Car, PersonStanding, MapPinIcon, Globe } from 'lucide-react';
+import FuturisticBackground from '../FuturisticBackground';
+import { geocodeAddressWithGemini, getRouteAnalysisForDisplay, analyzeTextWithGemini, reverseGeocodeWithGemini, findNearestValidCoordinates } from '../../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { exportRouteResultsToXLSX } from '../../services/DataProcessingService';
 
 const MAX_ROUTES = 8;
 const ROUTE_COLORS_KEYS = ['accent1', 'accent2', 'accent3', 'accent4', 'pink-500', 'cyan-400', 'amber-500', 'lime-500'];
-
-const LoadingSpinner: React.FC<{ text?: string; size?: 'sm' | 'md' | 'lg' }> = ({ text, size = 'md' }) => {
-  const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-8 h-8', 
-    lg: 'w-12 h-12'
-  };
-  
-  return (
-    <div className="flex items-center justify-center gap-3">
-      <div className={`${sizeClasses[size]} border-4 border-t-transparent border-purple-500 rounded-full animate-spin`}></div>
-      {text && <span className="text-purple-300 animate-pulse">{text}</span>}
-    </div>
-  );
-};
-
-const Button: React.FC<{
-  children: React.ReactNode;
-  onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
-  disabled?: boolean;
-  isLoading?: boolean;
-  leftIcon?: React.ReactNode;
-  className?: string;
-}> = ({ children, onClick, variant = 'primary', size = 'md', disabled, isLoading, leftIcon, className = '' }) => {
-  const baseClasses = 'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900';
-  
-  const variantClasses = {
-    primary: 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white focus:ring-blue-400',
-    secondary: 'bg-gray-700 hover:bg-gray-600 text-gray-200 focus:ring-gray-500',
-    danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-400',
-    ghost: 'bg-transparent hover:bg-gray-700 text-gray-300 hover:text-white focus:ring-gray-500'
-  };
-  
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base'
-  };
-  
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || isLoading}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${disabled || isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'} ${className}`}
-    >
-      {isLoading ? <LoadingSpinner size="sm" /> : leftIcon}
-      {children}
-    </button>
-  );
-};
-
-const Input: React.FC<{
-  type?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string;
-  className?: string;
-  id?: string;
-}> = ({ type = 'text', value, onChange, placeholder, className = '', id }) => {
-  return (
-    <input
-      type={type}
-      id={id}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className={`w-full p-2 bg-gray-700 text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 transition-colors ${className}`}
-    />
-  );
-};
 
 export const RoutePlannerView: React.FC = () => {
   const { theme, reduceMotion } = useContext(AppContext) as AppContextType;
@@ -104,6 +32,7 @@ export const RoutePlannerView: React.FC = () => {
   
   const [isLoading, setIsLoading] = useState(false);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
+
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>("ID"); 
   const [uploadedFile, setUploadedFile] = useState<FileWithPath | null>(null);
   const [bulkRouteResults, setBulkRouteResults] = useState<BulkRouteResultItem[]>([]);
@@ -113,16 +42,16 @@ export const RoutePlannerView: React.FC = () => {
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
   const [isAiAnalysisLoading, setIsAiAnalysisLoading] = useState<boolean>(false);
 
+  // Advanced settings
+  const [customSpeedKmh, setCustomSpeedKmh] = useState<number>(AVERAGE_TRAVEL_SPEED_KMH);
+  const [includeTrafficFactor, setIncludeTrafficFactor] = useState<boolean>(true);
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0);
+
   // State for minimizing sections
   const [isManualInputMinimized, setIsManualInputMinimized] = useState<boolean>(false);
   const [isBulkProcessingMinimized, setIsBulkProcessingMinimized] = useState<boolean>(true);
   const [isGlobalAiAnalysisMinimized, setIsGlobalAiAnalysisMinimized] = useState<boolean>(true);
   const [isAdvancedSettingsMinimized, setIsAdvancedSettingsMinimized] = useState<boolean>(true);
-
-  // Advanced settings
-  const [customSpeedKmh, setCustomSpeedKmh] = useState<number>(AVERAGE_TRAVEL_SPEED_KMH);
-  const [includeTrafficFactor, setIncludeTrafficFactor] = useState<boolean>(true);
-  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0);
 
   const parseCoordinates = (input: string): LatLngTuple | null => {
     const parts = input.split(',').map(part => part.trim());
@@ -174,12 +103,36 @@ export const RoutePlannerView: React.FC = () => {
     let errorMsgA: string | null = null;
     let errorMsgB: string | null = null;
     let status: RouteResult['status'] = 'pending';
+    let resolvedLocationA = originalA;
+    let resolvedLocationB = originalB;
 
-    if (!finalCoordsA && locationAInput.trim()) {
+    // Enhanced coordinate processing for Location A
+    if (finalCoordsA) {
+      // If input is coordinates, try to get address
+      try {
+        const reverseResult = await reverseGeocodeWithGemini(finalCoordsA[0], finalCoordsA[1]);
+        if (reverseResult && !('error' in reverseResult)) {
+          resolvedLocationA = `${reverseResult.address} (${reverseResult.city})`;
+        } else {
+          // Try to find nearest valid coordinates
+          const nearestResult = await findNearestValidCoordinates(finalCoordsA[0], finalCoordsA[1]);
+          if (nearestResult && !('error' in nearestResult)) {
+            finalCoordsA = nearestResult.coordinates;
+            resolvedLocationA = `${nearestResult.address} (${nearestResult.city}) - Nearest Valid Location`;
+          } else {
+            resolvedLocationA = `${finalCoordsA[0]}, ${finalCoordsA[1]} (Coordinates)`;
+          }
+        }
+      } catch (error) {
+        resolvedLocationA = `${finalCoordsA[0]}, ${finalCoordsA[1]} (Coordinates)`;
+      }
+    } else if (locationAInput.trim()) {
+      // If input is address, geocode it
       const geocodeResultA = await geocodeAddressWithGemini(locationAInput);
       if (geocodeResultA && !('error' in geocodeResultA)) {
         finalCoordsA = geocodeResultA;
         geocodingPerformedA = true;
+        resolvedLocationA = locationAInput;
       } else if (geocodeResultA && 'error' in geocodeResultA) {
         errorMsgA = geocodeResultA.error;
       } else {
@@ -187,11 +140,33 @@ export const RoutePlannerView: React.FC = () => {
       }
     }
 
-    if (!finalCoordsB && locationBInput.trim()) {
+    // Enhanced coordinate processing for Location B
+    if (finalCoordsB) {
+      // If input is coordinates, try to get address
+      try {
+        const reverseResult = await reverseGeocodeWithGemini(finalCoordsB[0], finalCoordsB[1]);
+        if (reverseResult && !('error' in reverseResult)) {
+          resolvedLocationB = `${reverseResult.address} (${reverseResult.city})`;
+        } else {
+          // Try to find nearest valid coordinates
+          const nearestResult = await findNearestValidCoordinates(finalCoordsB[0], finalCoordsB[1]);
+          if (nearestResult && !('error' in nearestResult)) {
+            finalCoordsB = nearestResult.coordinates;
+            resolvedLocationB = `${nearestResult.address} (${nearestResult.city}) - Nearest Valid Location`;
+          } else {
+            resolvedLocationB = `${finalCoordsB[0]}, ${finalCoordsB[1]} (Coordinates)`;
+          }
+        }
+      } catch (error) {
+        resolvedLocationB = `${finalCoordsB[0]}, ${finalCoordsB[1]} (Coordinates)`;
+      }
+    } else if (locationBInput.trim()) {
+      // If input is address, geocode it
       const geocodeResultB = await geocodeAddressWithGemini(locationBInput);
       if (geocodeResultB && !('error' in geocodeResultB)) {
         finalCoordsB = geocodeResultB;
         geocodingPerformedB = true;
+        resolvedLocationB = locationBInput;
       } else if (geocodeResultB && 'error' in geocodeResultB) {
         errorMsgB = geocodeResultB.error;
       } else {
@@ -228,7 +203,7 @@ export const RoutePlannerView: React.FC = () => {
       const distanceKm = calculateHaversineDistance(finalCoordsA[0], finalCoordsA[1], finalCoordsB[0], finalCoordsB[1]);
       const straightLineHours = distanceKm / customSpeedKmh;
       const heuristicFactor = HEURISTIC_TRAVEL_FACTORS[travelMode] || 1;
-      const trafficFactor = includeTrafficFactor ? 1.2 : 1;
+      const trafficFactor = includeTrafficFactor ? 1.2 : 1; // 20% traffic adjustment
       const estimatedTravelHours = straightLineHours * heuristicFactor * trafficFactor;
       
       status = 'success';
@@ -238,14 +213,14 @@ export const RoutePlannerView: React.FC = () => {
         estimatedTravelDurationHours: formatDuration(estimatedTravelHours),
         travelMode,
         error: null,
-        calculationType: (geocodingPerformedA || geocodingPerformedB) ? 'geocoded_haversine' : 'haversine',
-        message: `Estimasi durasi garis lurus @${customSpeedKmh}km/jam. Durasi perjalanan difaktorkan untuk ${travelMode.toLowerCase()}${includeTrafficFactor ? ' dengan faktor lalu lintas' : ''}.`,
+        calculationType: (geocodingPerformedA || geocodingPerformedB) ? 'enhanced_geocoded_haversine' : 'enhanced_haversine',
+        message: `Estimasi durasi garis lurus @${customSpeedKmh}km/jam. Durasi perjalanan difaktorkan untuk ${travelMode.toLowerCase()}${includeTrafficFactor ? ' dengan faktor lalu lintas (+20%)' : ''}.`,
         status,
         fromLocation: finalCoordsA.join(','),
         toLocation: finalCoordsB.join(','),
         calculatedAt,
-        originalInputA: originalA,
-        originalInputB: originalB,
+        originalInputA: resolvedLocationA,
+        originalInputB: resolvedLocationB,
       };
     }
     
@@ -338,15 +313,16 @@ export const RoutePlannerView: React.FC = () => {
   
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ["From_Location", "To_Location", "Travel_Mode"],
-      ["Jakarta, Indonesia", "Surabaya, Indonesia", "DRIVING"],
-      ["Eiffel Tower, Paris", "Big Ben, London", "WALKING"],
-      ["Central Park, New York", "Times Square, New York", "CYCLING"]
+      ["From_Location", "To_Location", "Travel_Mode (DRIVING, WALKING, CYCLING)"], 
+      ["Jakarta, Indonesia", "Surabaya, Indonesia", "DRIVING"], 
+      ["-6.2088,106.8456", "-7.2575,112.7521", "WALKING"],
+      ["Eiffel Tower, Paris", "Big Ben, London", "CYCLING"],
+      ["40.7128,-74.0060", "34.0522,-118.2437", "DRIVING"]
     ]);
-    XLSX.utils.sheet_add_aoa(ws, [["Note: Travel_Mode options: DRIVING, WALKING, CYCLING. Defaults to DRIVING if blank."]], {origin: "A5"});
+    XLSX.utils.sheet_add_aoa(ws, [["Note: You can use addresses, coordinates (lat,lng), or mix both. Travel modes: DRIVING, WALKING, CYCLING"]], {origin: "A6"});
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "RoutesTemplate");
-    XLSX.writeFile(wb, "RoutePlanner_Template.xlsx");
+    XLSX.writeFile(wb, "RoutePlanner_Enhanced_Template.xlsx");
   };
 
   const onBulkDrop = useCallback(async (acceptedFiles: FileWithPath[]) => {
@@ -389,7 +365,7 @@ export const RoutePlannerView: React.FC = () => {
           setBulkRouteResults([...results]); 
 
           if (from.trim() && to.trim()) {
-            const routeCalcItem: RouteCalculation = { id: bulkId, locationAInput: from, locationBInput: to, travelMode, result: null, color: RAW_COLOR_VALUES[theme.accent1] || '#00D4FF' };
+            const routeCalcItem: RouteCalculation = { id: bulkId, locationAInput: from, locationBInput: to, travelMode, result: null, color: theme.accent1 };
             const result = await processSingleRoute(routeCalcItem);
             results[i] = { ...results[i], ...result, originalInputA: from, originalInputB: to, fromLocation: result.fromLocation || from, toLocation: result.toLocation || to };
           } else {
@@ -407,15 +383,7 @@ export const RoutePlannerView: React.FC = () => {
     reader.readAsBinaryString(file);
   }, [processSingleRoute, theme.accent1]);
   
-  const { getRootProps: getBulkRootProps, getInputProps: getBulkInputProps, isDragActive: isBulkDragActive } = useDropzone({ 
-    onDrop: onBulkDrop, 
-    accept: { 
-      'application/vnd.ms-excel': ['.xls'], 
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] 
-    }, 
-    maxFiles: 1, 
-    disabled: isBulkLoading 
-  });
+  const { getRootProps: getBulkRootProps, getInputProps: getBulkInputProps, isDragActive: isBulkDragActive } = useDropzone({ onDrop: onBulkDrop, accept: { 'application/vnd.ms-excel': ['.xls'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }, maxFiles: 1, disabled: isBulkLoading });
   
   const handleGenerateGlobalAiAnalysis = async () => {
     const successfulRoutes = routeCalculations.filter(rc => rc.result?.status === 'success');
@@ -498,169 +466,160 @@ export const RoutePlannerView: React.FC = () => {
     return null;
   };
 
-  const getSelectStyles = () => ({
-    baseClassName: 'p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 border transition-colors',
-    style: {
-      backgroundColor: RAW_COLOR_VALUES[theme.darkBg] || '#1f2937',
-      color: '#e5e7eb',
-      borderColor: '#4b5563'
-    },
-    optionStyle: {
-      backgroundColor: RAW_COLOR_VALUES[theme.darkBg] || '#1f2937',
-      color: '#e5e7eb'
-    }
+  const getSelectBaseStyles = () => ({
+    baseClassName: `p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-${theme.accent1} border border-gray-600`,
+    style: { backgroundColor: RAW_COLOR_VALUES[theme.darkBg] || '#0A0F1E', color: '#E5E7EB' },
+    optionStyle: { backgroundColor: RAW_COLOR_VALUES[theme.darkBg] || '#0A0F1E', color: '#E5E7EB' }
   });
 
-  const selectStyles = getSelectStyles();
+  const selectStyles = getSelectBaseStyles();
+
+  // Statistics calculation
+  const totalRoutes = routeCalculations.length;
+  const successfulRoutes = routeCalculations.filter(rc => rc.result?.status === 'success').length;
+  const totalBulkRoutes = bulkRouteResults.length;
+  const successfulBulkRoutes = bulkRouteResults.filter(br => br.status === 'success').length;
 
   return (
     <div className={`p-4 md:p-8 text-gray-100 overflow-auto h-full relative`}>
+      <FuturisticBackground theme={theme} reduceMotion={reduceMotion} />
       <div className={`relative z-10 ${animationClass}`}>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className={`text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500`}>
-            <Route className="inline mr-3" size={36} />
-            Perencana & Analis Rute Canggih
-          </h1>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 px-3 py-1 bg-green-500/20 rounded-full border border-green-500/50">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-green-300 text-sm font-medium">AI Powered</span>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/20 rounded-full border border-blue-500/50">
-              <Globe size={14} className="text-blue-300" />
-              <span className="text-blue-300 text-sm font-medium">Global Coverage</span>
-            </div>
+        <h1 className={`text-3xl md:text-4xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-${theme.accent1} to-${theme.accent2}`}>
+            🗺️ Perencana & Analis Rute Canggih
+        </h1>
+
+        {/* Statistics Dashboard */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="panel-holographic p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-blue-400">{totalRoutes}</div>
+            <div className="text-xs text-gray-400">Total Rute Manual</div>
+          </div>
+          <div className="panel-holographic p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-green-400">{successfulRoutes}</div>
+            <div className="text-xs text-gray-400">Rute Berhasil</div>
+          </div>
+          <div className="panel-holographic p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-purple-400">{totalBulkRoutes}</div>
+            <div className="text-xs text-gray-400">Rute Massal</div>
+          </div>
+          <div className="panel-holographic p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-cyan-400">{successfulBulkRoutes}</div>
+            <div className="text-xs text-gray-400">Massal Berhasil</div>
           </div>
         </div>
 
         {/* Advanced Settings Section */}
-        <div className={`bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-gray-700 mb-6`}>
+        <div className={`panel-holographic p-4 rounded-xl shadow-xl border border-gray-700 mb-6`}>
           <div className="flex justify-between items-center mb-3 cursor-pointer" onClick={() => setIsAdvancedSettingsMinimized(!isAdvancedSettingsMinimized)}>
-            <div className="flex items-center">
-              <Settings size={20} className="mr-2 text-amber-400" />
-              <h2 className="text-lg font-semibold text-amber-400">Pengaturan Lanjutan</h2>
-            </div>
-            <Button variant="ghost" size="sm" className="!p-1">
+            <h2 className={`text-lg font-semibold text-${theme.accent3}`}>⚙️ Pengaturan Lanjutan</h2>
+            <button className="p-1 text-gray-400 hover:text-white" aria-label={isAdvancedSettingsMinimized ? "Expand Advanced Settings" : "Collapse Advanced Settings"}>
               {isAdvancedSettingsMinimized ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-            </Button>
+            </button>
           </div>
           <div className={`${contentAnimationClasses} ${isAdvancedSettingsMinimized ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100'}`}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Kecepatan Rata-rata (km/jam):</label>
-                <Input
+                <label htmlFor="customSpeed" className="block text-sm font-medium mb-1">Kecepatan Rata-rata (km/jam):</label>
+                <input
                   type="number"
-                  value={customSpeedKmh.toString()}
+                  id="customSpeed"
+                  value={customSpeedKmh}
                   onChange={(e) => setCustomSpeedKmh(Math.max(1, parseInt(e.target.value) || AVERAGE_TRAVEL_SPEED_KMH))}
-                  className="w-full"
+                  className="w-full p-2 bg-gray-700 text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="1"
+                  max="300"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Auto Refresh (menit, 0=off):</label>
-                <Input
-                  type="number"
-                  value={autoRefreshInterval.toString()}
-                  onChange={(e) => setAutoRefreshInterval(Math.max(0, parseInt(e.target.value) || 0))}
-                  className="w-full"
-                />
+                <label htmlFor="trafficFactor" className="block text-sm font-medium mb-1">Faktor Lalu Lintas:</label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="trafficFactor"
+                    checked={includeTrafficFactor}
+                    onChange={(e) => setIncludeTrafficFactor(e.target.checked)}
+                    className="h-4 w-4 text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-400"
+                  />
+                  <span className="text-sm">Tambah 20% untuk lalu lintas</span>
+                </label>
               </div>
-              <div className="flex items-center">
+              <div>
+                <label htmlFor="autoRefresh" className="block text-sm font-medium mb-1">Auto-refresh (menit, 0=off):</label>
                 <input
-                  type="checkbox"
-                  id="trafficFactor"
-                  checked={includeTrafficFactor}
-                  onChange={(e) => setIncludeTrafficFactor(e.target.checked)}
-                  className="mr-2"
+                  type="number"
+                  id="autoRefresh"
+                  value={autoRefreshInterval}
+                  onChange={(e) => setAutoRefreshInterval(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full p-2 bg-gray-700 text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="0"
+                  max="60"
                 />
-                <label htmlFor="trafficFactor" className="text-sm">Sertakan Faktor Lalu Lintas (+20%)</label>
               </div>
             </div>
           </div>
         </div>
 
         {/* Manual Route Input Section */}
-        <div className={`bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-gray-700 mb-6 ${cardHoverClass}`}>
+        <div className={`panel-holographic p-4 rounded-xl shadow-xl border border-gray-700 mb-6`}>
           <div className="flex justify-between items-center mb-3 cursor-pointer" onClick={() => setIsManualInputMinimized(!isManualInputMinimized)}>
-            <div className="flex items-center">
-              <MapPin size={20} className="mr-2 text-blue-400" />
-              <h2 className="text-lg font-semibold text-blue-400">Konfigurasi & Input Rute Manual</h2>
-              <span className="ml-2 px-2 py-1 bg-blue-500/20 rounded-full text-xs text-blue-300">
-                {routeCalculations.length}/{MAX_ROUTES} Rute
-              </span>
-            </div>
-            <Button variant="ghost" size="sm" className="!p-1">
+            <h2 className={`text-lg font-semibold text-${theme.accent1}`}>📍 Konfigurasi & Input Rute Manual</h2>
+            <button className="p-1 text-gray-400 hover:text-white" aria-label={isManualInputMinimized ? "Expand Manual Input" : "Collapse Manual Input"}>
               {isManualInputMinimized ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-            </Button>
+            </button>
           </div>
           <div className={`${contentAnimationClasses} ${isManualInputMinimized ? 'max-h-0 opacity-0' : 'max-h-[2000px] opacity-100'}`}>
             <div className="mb-4">
                 <label htmlFor="countryContext" className="block text-sm font-medium mb-1 flex items-center">
-                  <Globe size={14} className="mr-1" />
+                  <Globe size={16} className="mr-2" />
                   Konteks Negara (untuk Analisis AI):
                 </label>
-                <select 
-                  id="countryContext" 
-                  value={selectedCountryCode} 
-                  onChange={(e) => setSelectedCountryCode(e.target.value)} 
-                  className={`${selectStyles.baseClassName} w-full md:w-1/2`} 
-                  style={selectStyles.style}
-                >
+                <select id="countryContext" value={selectedCountryCode} onChange={(e) => setSelectedCountryCode(e.target.value)} className={`${selectStyles.baseClassName} w-full md:w-1/2`} style={selectStyles.style}>
                     <option value="" style={selectStyles.optionStyle}>-- Pilih Negara (opsional) --</option>
-                    {COUNTRIES_DATA.map(country => (
-                      <option key={country.code} value={country.code} style={selectStyles.optionStyle}>
-                        {country.name}
-                      </option>
-                    ))}
+                    {COUNTRIES_DATA.map(country => (<option key={country.code} value={country.code} style={selectStyles.optionStyle}>{country.name}</option>))}
                 </select>
             </div>
 
             <div className="space-y-4 mb-6">
               {routeCalculations.map((rc, index) => (
-                <div key={rc.id} className={`bg-gray-900/50 p-4 rounded-xl shadow-inner border border-gray-600 border-opacity-50 ${cardHoverClass} flex flex-col`}>
+                <div key={rc.id} className={`panel-holographic p-4 rounded-xl shadow-inner border border-gray-700 border-opacity-50 ${cardHoverClass} flex flex-col`}>
                   <div className="flex justify-between items-center mb-3">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold" style={{color: rc.color}}>
-                        Rute {index + 1}
-                      </h2>
-                      <div className="w-3 h-3 rounded-full" style={{backgroundColor: rc.color}}></div>
-                    </div>
-                    <Button 
-                      variant="danger" 
-                      size="sm" 
+                    <h2 className={`text-lg font-semibold`} style={{color: rc.color}}>🛣️ Rute {index + 1}</h2>
+                    <button 
                       onClick={() => handleRemoveRoute(rc.id)} 
-                      className="!p-1.5" 
+                      title="Hapus Rute Ini" 
+                      className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-md transition-colors" 
                       disabled={routeCalculations.length <= 1}
                     >
                       <Trash2 size={14} />
-                    </Button>
+                    </button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                     <div>
                       <label htmlFor={`route${rc.id}LocationA`} className="block text-xs font-medium mb-0.5 flex items-center">
-                        <MapPin size={14} className="inline mr-1.5 text-green-400" />
+                        <MapPin size={14} className={`inline mr-1.5`} />
                         Lokasi A (Asal):
                       </label>
-                      <Input 
-                        type="text" 
-                        id={`route${rc.id}LocationA`} 
-                        value={rc.locationAInput} 
-                        onChange={(e) => handleInputChange(rc.id, 'A', e.target.value)} 
-                        placeholder="Alamat atau Lat,Lng" 
-                        className="w-full !text-xs"
+                      <input
+                        type="text"
+                        id={`route${rc.id}LocationA`}
+                        value={rc.locationAInput}
+                        onChange={(e) => handleInputChange(rc.id, 'A', e.target.value)}
+                        placeholder="Alamat atau Lat,Lng"
+                        className="w-full p-2 bg-gray-700 text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                       />
                     </div>
                     <div>
                       <label htmlFor={`route${rc.id}LocationB`} className="block text-xs font-medium mb-0.5 flex items-center">
-                        <MapPin size={14} className="inline mr-1.5 text-red-400" />
+                        <MapPinIcon size={14} className={`inline mr-1.5`} />
                         Lokasi B (Tujuan):
                       </label>
-                      <Input 
-                        type="text" 
-                        id={`route${rc.id}LocationB`} 
-                        value={rc.locationBInput} 
-                        onChange={(e) => handleInputChange(rc.id, 'B', e.target.value)} 
-                        placeholder="Alamat atau Lat,Lng" 
-                        className="w-full !text-xs"
+                      <input
+                        type="text"
+                        id={`route${rc.id}LocationB`}
+                        value={rc.locationBInput}
+                        onChange={(e) => handleInputChange(rc.id, 'B', e.target.value)}
+                        placeholder="Alamat atau Lat,Lng"
+                        className="w-full p-2 bg-gray-700 text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                       />
                     </div>
                     <div>
@@ -672,87 +631,63 @@ export const RoutePlannerView: React.FC = () => {
                         id={`route${rc.id}TravelMode`} 
                         value={rc.travelMode} 
                         onChange={(e) => handleInputChange(rc.id, 'TravelMode', e.target.value)} 
-                        className={`${selectStyles.baseClassName} w-full !text-xs`} 
+                        className={`${selectStyles.baseClassName} w-full text-xs`} 
                         style={selectStyles.style}
                       >
-                        {TRAVEL_MODES.map(mode => (
-                          <option key={mode.value} value={mode.value} style={selectStyles.optionStyle}>
-                            {mode.label}
-                          </option>
-                        ))}
+                        {TRAVEL_MODES.map(mode => (<option key={mode.value} value={mode.value} style={selectStyles.optionStyle}>{mode.label}</option>))}
                       </select>
                     </div>
                   </div>
                   
                   {rc.result && (
-                    <div className="bg-gray-800/50 p-3 rounded-lg shadow-inner border border-gray-600 border-opacity-50 mb-3">
+                    <div className={`panel-holographic p-3 rounded-lg shadow-inner border border-gray-700 border-opacity-50`} style={{backgroundColor: `${RAW_COLOR_VALUES[rc.color.replace('text-', '')] || rc.color}1A`}}>
                         <div className="flex justify-between items-start mb-2">
                             <div className="flex items-center gap-2">
-                                <span 
-                                  className="px-2 py-1 rounded-full text-xs font-semibold text-white bg-gradient-to-r" 
-                                  style={{background: `linear-gradient(to right, ${rc.color}, ${RAW_COLOR_VALUES[theme.accent2] || '#8B5CF6'})`}} 
-                                  title={rc.result.originalInputA || rc.locationAInput}
-                                >
-                                  {(rc.result.originalInputA?.substring(0,15) || rc.locationAInput.substring(0,15) || 'Asal') + '...'}
+                                <span className={`px-2 py-1 rounded-full text-xs font-semibold text-white bg-gradient-to-r`} style={{background: `linear-gradient(to right, ${rc.color}, ${RAW_COLOR_VALUES[theme.accent2] || '#8B5CF6'})`}} title={rc.result.originalInputA || rc.locationAInput}>
+                                  {(rc.result.originalInputA || rc.locationAInput).substring(0,20) || 'Asal'}...
                                 </span>
                                 <Navigation size={14} className="text-white opacity-70" />
-                                <span 
-                                  className="px-2 py-1 rounded-full text-xs font-semibold text-white bg-gradient-to-r" 
-                                  style={{background: `linear-gradient(to right, ${RAW_COLOR_VALUES[theme.accent2] || '#8B5CF6'}, ${rc.color})`}} 
-                                  title={rc.result.originalInputB || rc.locationBInput}
-                                >
-                                  {(rc.result.originalInputB?.substring(0,15) || rc.locationBInput.substring(0,15) || 'Tujuan') + '...'}
+                                <span className={`px-2 py-1 rounded-full text-xs font-semibold text-white bg-gradient-to-r`} style={{background: `linear-gradient(to right, ${RAW_COLOR_VALUES[theme.accent2] || '#8B5CF6'}, ${rc.color})`}} title={rc.result.originalInputB || rc.locationBInput}>
+                                  {(rc.result.originalInputB || rc.locationBInput).substring(0,20) || 'Tujuan'}...
                                 </span>
                             </div>
                             {rc.result.estimatedTravelDurationHours && (
-                                <div className="px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 text-orange-300 bg-orange-600/50 border border-orange-500/50">
-                                    <Clock size={10} /> 
-                                    {rc.result.estimatedTravelDurationHours} 
-                                    ({travelModeIcon(rc.travelMode)}{rc.travelMode.toLowerCase()})
+                                <div className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 text-orange-300 bg-orange-600/50 border border-orange-500/50`}>
+                                    <Clock size={10} /> {rc.result.estimatedTravelDurationHours} ({travelModeIcon(rc.travelMode)}{rc.travelMode.toLowerCase()})
                                 </div>
                             )}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-xs mb-2">
                             <div><strong className="opacity-70">Dari (Koordinat):</strong> <span className="font-mono">{rc.result.fromLocation || 'N/A'}</span></div>
                             <div><strong className="opacity-70">Ke (Koordinat):</strong> <span className="font-mono">{rc.result.toLocation || 'N/A'}</span></div>
-                            <div><strong className="opacity-70">Jarak Lurus:</strong> <span className="font-bold text-green-400">{rc.result.straightLineDistanceKm || 'N/A'}</span></div>
+                            <div><strong className="opacity-70">Jarak Lurus:</strong> <span className="font-bold" style={{color: RAW_COLOR_VALUES[theme.accent3] || '#00FF88'}}>{rc.result.straightLineDistanceKm || 'N/A'}</span></div>
                             <div><strong className="opacity-70">Durasi Lurus:</strong> <span className="font-bold">{rc.result.straightLineDurationHours || 'N/A'}</span></div>
                         </div>
                         <hr className="my-2 border-white/10" />
                         <div className="flex justify-between items-center">
-                             <p className={`text-xs ${rc.result.error ? 'text-red-400' : 'text-green-400'} flex items-center gap-1`}>
-                                {rc.result.error ? (
-                                  <>
-                                    <AlertTriangle size={12} />
-                                    Error: {rc.result.error}
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle size={12} />
-                                    Sukses Dihitung
-                                  </>
-                                )}
+                             <p className={`text-xs ${rc.result.error ? 'text-red-400' : `text-green-400`}`}>
+                                {rc.result.error ? `❌ Error: ${rc.result.error}` : (rc.result.status === 'success' ? "✅ Sukses Dihitung" : "⏳ Status Tidak Diketahui")}
                             </p>
                             <div className="text-right text-[10px] opacity-60">
-                                <p>Calculated: {rc.result.calculatedAt ? new Date(rc.result.calculatedAt).toLocaleTimeString() : '-'}</p>
-                                {rc.result.calculationType && <p>Type: {rc.result.calculationType.replace(/_/g, ' ')}</p>}
+                                <p>📅 {rc.result.calculatedAt ? new Date(rc.result.calculatedAt).toLocaleTimeString() : '-'}</p>
+                                {rc.result.calculationType && <p>🔧 {rc.result.calculationType.replace(/_/g, ' ')}</p>}
                             </div>
                         </div>
-                        {rc.result.message && <p className="text-[10px] opacity-70 mt-1 italic">{rc.result.message}</p>}
+                        {rc.result.message && <p className="text-[10px] opacity-70 mt-1 italic">💡 {rc.result.message}</p>}
                     </div>
                   )}
                   {rc.result?.status === 'success' && (
                     <div className="mt-3">
                       {rc.isAiRouteAnalysisLoading ? 
                         <div className="flex items-center text-xs opacity-70">
-                          <LoadingSpinner size="sm"/> 
-                          <span className="ml-2">Memuat analisis AI...</span>
+                          <div className="w-4 h-4 border-2 border-t-transparent border-purple-400 rounded-full animate-spin mr-2"></div>
+                          <span>🤖 Memuat analisis AI...</span>
                         </div> :
                         rc.aiRouteAnalysis ? 
-                        (<div className="p-2 border rounded-md bg-gray-800/30 border-gray-600 max-h-40 overflow-y-auto text-xs">
+                        (<div className={`p-2 border rounded-md bg-gray-800/30 border-gray-600 max-h-40 overflow-y-auto text-xs`}>
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{rc.aiRouteAnalysis}</ReactMarkdown>
                         </div>) : 
-                        <p className="text-xs italic opacity-60">Analisis AI belum tersedia untuk rute ini.</p>
+                        <p className="text-xs italic opacity-60">🤖 Analisis AI belum tersedia untuk rute ini.</p>
                       }
                     </div>
                   )}
@@ -761,129 +696,125 @@ export const RoutePlannerView: React.FC = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               {routeCalculations.length < MAX_ROUTES && (
-                  <Button onClick={handleAddRoute} variant="secondary" className="flex-1" leftIcon={<PlusCircle size={16}/>}>
-                    Tambah Rute Lain ({routeCalculations.length}/{MAX_ROUTES})
-                  </Button>
+                  <button
+                    onClick={handleAddRoute}
+                    className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <PlusCircle size={16}/>
+                    Tambah Rute Lain
+                  </button>
               )}
-              <Button 
+              <button 
                 onClick={handleExportManualRoutes} 
-                variant="secondary" 
-                className="flex-1" 
-                leftIcon={<Download size={16}/>}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                 disabled={!routeCalculations.some(rc => rc.result?.status === 'success')}
               >
-                Unduh Rute Manual (XLSX)
-              </Button>
+                <Download size={16}/>
+                📊 Unduh Rute Manual (XLSX)
+              </button>
             </div>
-            <Button 
+            <button 
               onClick={handleCalculateAllRoutes} 
-              variant="primary" 
-              className="w-full mt-4" 
-              isLoading={isLoading} 
-              leftIcon={isLoading ? undefined : <Calculator size={18} />}
+              className="w-full mt-4 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-semibold transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+              disabled={isLoading}
             >
-              {isLoading ? 'Menghitung...' : 'Hitung Semua Rute Manual & Analisis AI'}
-            </Button>
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+                  Menghitung...
+                </>
+              ) : (
+                <>
+                  <Calculator size={18} />
+                  🚀 Hitung Semua Rute Manual & Analisis AI
+                </>
+              )}
+            </button>
           </div>
         </div>
 
         {/* Bulk Route Processing Section */}
-        <div className={`bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-gray-700 mb-6 ${cardHoverClass}`}>
+        <div className={`panel-holographic p-4 rounded-xl shadow-xl border border-gray-700 mb-6`}>
           <div className="flex justify-between items-center mb-3 cursor-pointer" onClick={() => setIsBulkProcessingMinimized(!isBulkProcessingMinimized)}>
-            <div className="flex items-center">
-              <UploadCloud size={20} className="mr-2 text-yellow-400" />
-              <h2 className="text-lg font-semibold text-yellow-400">Pemrosesan Rute Massal</h2>
-              {bulkRouteResults.length > 0 && (
-                <span className="ml-2 px-2 py-1 bg-yellow-500/20 rounded-full text-xs text-yellow-300">
-                  {bulkRouteResults.length} Hasil
-                </span>
-              )}
-            </div>
-             <Button variant="ghost" size="sm" className="!p-1">
+            <h2 className={`text-lg font-semibold text-${theme.accent4}`}>📦 Pemrosesan Rute Massal Canggih</h2>
+             <button className="p-1 text-gray-400 hover:text-white" aria-label={isBulkProcessingMinimized ? "Expand Bulk Processing" : "Collapse Bulk Processing"}>
               {isBulkProcessingMinimized ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-            </Button>
+            </button>
           </div>
            <div className={`${contentAnimationClasses} ${isBulkProcessingMinimized ? 'max-h-0 opacity-0' : 'max-h-[1000px] opacity-100'}`}>
+            <div className="bg-blue-900/20 border border-blue-700/50 p-3 rounded-lg mb-4">
+              <h3 className="text-sm font-semibold text-blue-300 mb-2">🔥 Fitur Canggih Pemrosesan Massal:</h3>
+              <ul className="text-xs text-blue-200 space-y-1">
+                <li>• 🗺️ <strong>Auto-detect koordinat:</strong> Jika input adalah koordinat, otomatis mencari alamat dan nama kota</li>
+                <li>• 🎯 <strong>Smart coordinate validation:</strong> Koordinat tidak valid akan dicari titik terdekat yang valid</li>
+                <li>• 🏙️ <strong>Reverse geocoding:</strong> Koordinat diubah menjadi alamat lengkap dengan nama kota</li>
+                <li>• 🔄 <strong>Mixed input support:</strong> Bisa campuran alamat dan koordinat dalam satu file</li>
+              </ul>
+            </div>
             <div className="flex justify-end items-center mb-2">
-              <Button 
+              <button 
                 onClick={handleExportBulkRoutes} 
-                variant="secondary" 
-                size="sm" 
-                leftIcon={<Download size={16}/>}
+                className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
                 disabled={bulkRouteResults.length === 0}
               >
-                Unduh Hasil Massal (XLSX)
-              </Button>
+                <Download size={16}/>
+                📊 Unduh Hasil Massal (XLSX)
+              </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                <div 
-                  {...getBulkRootProps()} 
-                  className={`p-6 border-2 border-dashed rounded-lg cursor-pointer text-center transition-all duration-300 ${
-                    isBulkDragActive 
-                      ? 'border-blue-400 bg-blue-400/10 scale-105' 
-                      : 'border-gray-600 hover:border-blue-400 hover:bg-blue-400/5'
-                  }`}
-                >
+                <div {...getBulkRootProps()} className={`p-6 border-2 border-dashed rounded-lg cursor-pointer text-center border-gray-600 hover:border-blue-400 ${isBulkDragActive ? `border-blue-400 bg-blue-400/10` : ''} transition-all`}>
                     <input {...getBulkInputProps()} disabled={isBulkLoading} />
-                    <UploadCloud size={32} className={`mx-auto mb-2 ${isBulkDragActive ? 'text-blue-400' : 'text-gray-400'}`} />
-                    <p className="text-sm">{isBulkDragActive ? "Letakkan file di sini..." : "Seret & lepas file Excel, atau klik"}</p>
-                    <p className="text-xs opacity-60">(.xlsx, .xls) - Maksimal 20MB</p>
+                    <UploadCloud size={32} className={`mx-auto mb-2 ${isBulkDragActive ? `text-blue-400` : `text-gray-400`}`} />
+                    <p className="text-sm">{isBulkDragActive ? "📁 Letakkan file di sini..." : "📁 Seret & lepas file Excel, atau klik"}</p>
+                    <p className="text-xs opacity-60">(.xlsx, .xls) - Mendukung alamat dan koordinat</p>
                 </div>
-                <Button 
+                <button 
                   onClick={handleDownloadTemplate} 
-                  variant="secondary" 
-                  size="md" 
-                  leftIcon={<Download size={16}/>} 
-                  className="w-full md:w-auto self-center"
+                  className="w-full md:w-auto self-center px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                 >
-                  Unduh Template Excel
-                </Button>
+                  <Download size={16}/>
+                  📋 Unduh Template Excel Canggih
+                </button>
             </div>
-            {uploadedFile && (
-              <p className="text-xs mt-2 flex items-center gap-2">
-                <FileText size={14} className="text-green-400" />
-                File Terunggah: <span className="font-semibold text-green-400">{uploadedFile.name}</span>
-              </p>
-            )}
+            {uploadedFile && <p className="text-xs mt-2">📁 File Terunggah: <span className={`font-semibold text-purple-400`}>{uploadedFile.name}</span></p>}
             {isBulkLoading && (
-              <div className="mt-3 flex justify-center">
-                <LoadingSpinner text="Memproses rute massal..." />
+              <div className="mt-3 flex justify-center items-center">
+                <div className="w-8 h-8 border-4 border-t-transparent border-purple-400 rounded-full animate-spin mr-3"></div>
+                <span className="text-purple-300">🔄 Memproses rute massal dengan teknologi canggih...</span>
               </div>
             )}
             {bulkFileProcessingError && (
-              <div className="my-2 p-2 rounded-md bg-red-500/20 border border-red-500 text-red-300 text-xs flex items-center gap-1">
+              <div className={`my-2 p-2 rounded-md bg-red-900/20 border border-red-700 text-red-300 text-xs flex items-center gap-1`}>
                 <AlertTriangle size={14}/>
-                {bulkFileProcessingError}
+                ❌ {bulkFileProcessingError}
               </div>
             )}
             {bulkRouteResults.length > 0 && (
-                <div className="mt-4 max-h-80 overflow-y-auto border border-gray-600 rounded-md">
+                <div className="mt-4 max-h-80 overflow-y-auto border border-gray-700 rounded-md">
                     <table className="min-w-full text-xs">
-                        <thead className="bg-gray-700 sticky top-0 z-10">
+                        <thead className={`bg-gray-800 sticky top-0 z-10`}>
                           <tr className="text-left">
-                            <th className="p-1.5">Dari (Input)</th>
-                            <th className="p-1.5">Ke (Input)</th>
-                            <th className="p-1.5">Mode</th>
-                            <th className="p-1.5">Jarak</th>
-                            <th className="p-1.5">Estimasi Waktu</th>
-                            <th className="p-1.5">Status</th>
+                            <th className="p-1.5">📍 Dari (Input)</th>
+                            <th className="p-1.5">🎯 Ke (Input)</th>
+                            <th className="p-1.5">🚗 Mode</th>
+                            <th className="p-1.5">📏 Jarak</th>
+                            <th className="p-1.5">⏱️ Estimasi Waktu</th>
+                            <th className="p-1.5">📊 Status</th>
                           </tr>
                         </thead>
                         <tbody>
                           {bulkRouteResults.map(res => (
-                            <tr key={res.id} className="border-b border-gray-600 last:border-b-0 hover:bg-gray-700/30">
+                            <tr key={res.id} className={`border-b border-gray-700 last:border-b-0 hover:bg-gray-700/30`}>
                                 <td className="p-1.5 truncate max-w-[100px]" title={res.originalInputA}>{res.originalInputA}</td>
                                 <td className="p-1.5 truncate max-w-[100px]" title={res.originalInputB}>{res.originalInputB}</td>
                                 <td className="p-1.5">{travelModeIcon(res.travelMode || 'DRIVING')}{res.travelMode || 'N/A'}</td>
-                                <td className="p-1.5 font-mono">{res.straightLineDistanceKm || '-'}</td>
-                                <td className="p-1.5 font-mono">{res.estimatedTravelDurationHours || '-'}</td>
+                                <td className="p-1.5">{res.straightLineDistanceKm || '-'}</td>
+                                <td className="p-1.5">{res.estimatedTravelDurationHours || '-'}</td>
                                 <td className="p-1.5">
                                     {res.status === 'pending' && <Clock size={12} className="text-yellow-400 inline mr-1"/>}
                                     {res.status === 'success' && <CheckCircle size={12} className="text-green-400 inline mr-1"/>}
                                     {res.status?.startsWith('error') && <AlertTriangle size={12} className="text-red-400 inline mr-1"/>}
-                                    <span className="text-[10px] opacity-80">
-                                      {res.error ? res.error.substring(0,30)+'...' : res.status || 'Selesai'}
-                                    </span>
+                                    <span className="text-[10px] opacity-80">{res.error ? res.error.substring(0,30)+'...' : res.status || 'Selesai'}</span>
                                 </td>
                             </tr>
                           ))}
@@ -895,101 +826,53 @@ export const RoutePlannerView: React.FC = () => {
         </div>
         
         {/* Global AI Analysis Section */}
-        <div className={`bg-gray-800/80 backdrop-blur-sm p-4 rounded-xl shadow-xl border border-gray-700 mt-8 ${cardHoverClass}`}>
+        <div className={`panel-holographic p-4 rounded-xl shadow-xl border border-gray-700 mt-8`}>
             <div className="flex justify-between items-center mb-3 cursor-pointer" onClick={() => setIsGlobalAiAnalysisMinimized(!isGlobalAiAnalysisMinimized)}>
               <div className="flex items-center">
-                <Brain size={20} className="mr-2 text-purple-400" />
-                <h2 className="text-lg font-semibold text-purple-400">Analisis Global AI (Semua Rute Manual)</h2>
-                <Zap size={16} className="ml-2 text-yellow-400 animate-pulse" />
+                <Brain size={20} className={`mr-2 text-${theme.accent3}`} />
+                <h2 className={`text-lg font-semibold text-${theme.accent3}`}>🧠 Analisis Global AI (Semua Rute Manual)</h2>
               </div>
-              <Button variant="ghost" size="sm" className="!p-1">
+              <button className="p-1 text-gray-400 hover:text-white" aria-label={isGlobalAiAnalysisMinimized ? "Expand Global AI Analysis" : "Collapse Global AI Analysis"}>
                 {isGlobalAiAnalysisMinimized ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-              </Button>
+              </button>
             </div>
             <div className={`${contentAnimationClasses} ${isGlobalAiAnalysisMinimized ? 'max-h-0 opacity-0' : 'max-h-[1000px] opacity-100'}`}>
               <textarea 
                 value={aiAnalysisInstruction} 
                 onChange={(e) => setAiAnalysisInstruction(e.target.value)} 
-                placeholder="Masukkan perintah/pertanyaan Anda untuk AI tentang semua rute yang dihitung (misalnya, 'Bandingkan semua rute', 'Rute mana yang paling efisien?', 'Buat ringkasan potensi tantangan untuk semua rute')." 
+                placeholder="🤖 Masukkan perintah/pertanyaan Anda untuk AI tentang semua rute yang dihitung (misalnya, 'Bandingkan semua rute', 'Rute mana yang paling efisien?', 'Buat ringkasan potensi tantangan untuk semua rute')." 
                 rows={3} 
-                className="w-full p-2 border rounded-md text-xs bg-gray-700/50 border-gray-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-gray-200"
+                className={`w-full p-2 border rounded-md text-xs bg-gray-800/50 border-gray-600 focus:ring-1 focus:ring-${theme.accent1} focus:border-${theme.accent1} text-gray-200`}
               />
-              <div className="flex gap-2 mt-2">
-                <Button 
-                  onClick={handleGenerateGlobalAiAnalysis} 
-                  variant="primary" 
-                  size="sm" 
-                  isLoading={isAiAnalysisLoading} 
-                  disabled={isAiAnalysisLoading || !aiAnalysisInstruction.trim() || routeCalculations.every(rc => rc.result?.status !== 'success')} 
-                  className="flex-1" 
-                  leftIcon={<Play size={14}/>}
-                >
-                  Generate Analisis Global
-                </Button>
-                <Button 
-                  onClick={() => setAiAnalysisInstruction('Bandingkan efisiensi semua rute dan berikan rekomendasi terbaik')} 
-                  variant="secondary" 
-                  size="sm"
-                  leftIcon={<TrendingUp size={14}/>}
-                >
-                  Quick: Analisis Efisiensi
-                </Button>
-              </div>
+              <button 
+                onClick={handleGenerateGlobalAiAnalysis} 
+                disabled={isAiAnalysisLoading || !aiAnalysisInstruction.trim() || routeCalculations.every(rc => rc.result?.status !== 'success')} 
+                className="mt-2 w-full md:w-auto px-4 py-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white rounded-lg font-medium transition-all transform hover:scale-105 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAiAnalysisLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
+                    🤖 AI Menganalisis...
+                  </>
+                ) : (
+                  <>
+                    <Play size={14}/>
+                    🚀 Generate Analisis Global
+                  </>
+                )}
+              </button>
               {isAiAnalysisLoading && (
-                <div className="mt-3 flex justify-center">
-                  <LoadingSpinner text="AI sedang menganalisis rute..." />
+                <div className="mt-3 flex justify-center items-center">
+                  <div className="w-8 h-8 border-4 border-t-transparent border-green-400 rounded-full animate-spin mr-3"></div>
+                  <span className="text-green-300">🧠 AI sedang menganalisis rute dengan teknologi canggih...</span>
                 </div>
               )}
               {aiAnalysisResult && !isAiAnalysisLoading && (
-                <div className="mt-3 p-3 border rounded-md bg-gray-800/30 border-gray-600 max-h-60 overflow-y-auto text-xs">
+                <div className={`mt-3 p-3 border rounded-md bg-gray-800/30 border-gray-600 max-h-60 overflow-y-auto text-xs`}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiAnalysisResult}</ReactMarkdown>
                 </div>
               )}
             </div>
-        </div>
-
-        {/* Statistics Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-          <div className="bg-blue-500/20 p-4 rounded-lg border border-blue-500/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-300 text-sm font-medium">Total Rute Manual</p>
-                <p className="text-2xl font-bold text-blue-100">{routeCalculations.length}</p>
-              </div>
-              <Route size={24} className="text-blue-400" />
-            </div>
-          </div>
-          <div className="bg-green-500/20 p-4 rounded-lg border border-green-500/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-green-300 text-sm font-medium">Rute Berhasil</p>
-                <p className="text-2xl font-bold text-green-100">
-                  {routeCalculations.filter(rc => rc.result?.status === 'success').length}
-                </p>
-              </div>
-              <CheckCircle size={24} className="text-green-400" />
-            </div>
-          </div>
-          <div className="bg-yellow-500/20 p-4 rounded-lg border border-yellow-500/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-yellow-300 text-sm font-medium">Rute Massal</p>
-                <p className="text-2xl font-bold text-yellow-100">{bulkRouteResults.length}</p>
-              </div>
-              <UploadCloud size={24} className="text-yellow-400" />
-            </div>
-          </div>
-          <div className="bg-purple-500/20 p-4 rounded-lg border border-purple-500/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-purple-300 text-sm font-medium">AI Analisis</p>
-                <p className="text-2xl font-bold text-purple-100">
-                  {routeCalculations.filter(rc => rc.aiRouteAnalysis).length}
-                </p>
-              </div>
-              <Brain size={24} className="text-purple-400" />
-            </div>
-          </div>
         </div>
       </div>
     </div>

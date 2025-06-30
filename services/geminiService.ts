@@ -357,7 +357,7 @@ Example JSON Response:
     }
 };
 
-// --- NEW: Route Planner Functions ---
+// --- NEW: Enhanced Route Planner Functions ---
 
 export const geocodeAddressWithGemini = async (address: string): Promise<LatLngTuple | { error: string }> => {
     try {
@@ -389,6 +389,100 @@ export const geocodeAddressWithGemini = async (address: string): Promise<LatLngT
     } catch (error) {
         console.error('Error geocoding with Gemini:', error);
         return { error: 'Failed to geocode address' };
+    }
+};
+
+export const reverseGeocodeWithGemini = async (lat: number, lng: number): Promise<{ address: string; city: string } | { error: string }> => {
+    try {
+        const client = getClient();
+        const prompt = `Convert these coordinates to a readable address and city name: ${lat}, ${lng}
+        
+        Respond in this exact format:
+        ADDRESS: [full street address or landmark name]
+        CITY: [city name, country]
+        
+        If you cannot determine the location, respond with:
+        ERROR: Unable to reverse geocode coordinates`;
+        
+        const response = await client.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: {
+                temperature: 0.1,
+            }
+        });
+        
+        const text = response.text.trim();
+        
+        if (text.startsWith('ERROR:')) {
+            return { error: text.replace('ERROR:', '').trim() };
+        }
+        
+        const addressMatch = text.match(/ADDRESS:\s*(.+)/);
+        const cityMatch = text.match(/CITY:\s*(.+)/);
+        
+        if (addressMatch && cityMatch) {
+            return {
+                address: addressMatch[1].trim(),
+                city: cityMatch[1].trim()
+            };
+        }
+        
+        return { error: 'Invalid response format from AI' };
+    } catch (error) {
+        console.error('Error reverse geocoding with Gemini:', error);
+        return { error: 'Failed to reverse geocode coordinates' };
+    }
+};
+
+export const findNearestValidCoordinates = async (lat: number, lng: number): Promise<{ coordinates: LatLngTuple; address: string; city: string } | { error: string }> => {
+    try {
+        const client = getClient();
+        const prompt = `The coordinates ${lat}, ${lng} appear to be invalid or in an inaccessible location. 
+        Find the nearest valid, accessible location (like a nearby city, landmark, or populated area) and provide:
+        
+        COORDINATES: [latitude,longitude]
+        ADDRESS: [readable address or landmark name]
+        CITY: [city name, country]
+        
+        If you cannot find a suitable nearby location, respond with:
+        ERROR: No valid nearby location found`;
+        
+        const response = await client.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: {
+                temperature: 0.2,
+            }
+        });
+        
+        const text = response.text.trim();
+        
+        if (text.startsWith('ERROR:')) {
+            return { error: text.replace('ERROR:', '').trim() };
+        }
+        
+        const coordsMatch = text.match(/COORDINATES:\s*([^,]+),\s*(.+)/);
+        const addressMatch = text.match(/ADDRESS:\s*(.+)/);
+        const cityMatch = text.match(/CITY:\s*(.+)/);
+        
+        if (coordsMatch && addressMatch && cityMatch) {
+            const newLat = parseFloat(coordsMatch[1].trim());
+            const newLng = parseFloat(coordsMatch[2].trim());
+            
+            if (!isNaN(newLat) && !isNaN(newLng)) {
+                return {
+                    coordinates: [newLat, newLng],
+                    address: addressMatch[1].trim(),
+                    city: cityMatch[1].trim()
+                };
+            }
+        }
+        
+        return { error: 'Invalid response format from AI' };
+    } catch (error) {
+        console.error('Error finding nearest valid coordinates:', error);
+        return { error: 'Failed to find nearest valid location' };
     }
 };
 
