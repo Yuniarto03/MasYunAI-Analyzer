@@ -19,23 +19,61 @@ const getClient = (): GoogleGenAI => {
   return ai;
 };
 
+// Retry mechanism with exponential backoff
+const retryWithBackoff = async <T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> => {
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a quota/rate limit error
+      const isQuotaError = error?.error?.code === 429 || 
+                          error?.error?.status === 'RESOURCE_EXHAUSTED' ||
+                          error?.message?.includes('quota') ||
+                          error?.message?.includes('rate limit');
+      
+      // If it's the last attempt or not a quota error, throw immediately
+      if (attempt === maxRetries || !isQuotaError) {
+        throw error;
+      }
+      
+      // Calculate delay with exponential backoff and jitter
+      const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
+      console.warn(`Gemini API quota exceeded, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError!;
+};
+
 // Generic command function for AI text generation
 export const generateAICommand = async (prompt: string): Promise<string> => {
-  try {
-    const client = getClient();
-    const params: GenerateContentParameters = {
-      model: MODEL_TEXT,
-      contents: prompt,
-      // config: { // Optional: add specific config if needed
-      //   temperature: 0.7,
-      // }
-    };
-    const response: GenerateContentResponse = await client.models.generateContent(params);
-    return response.text;
-  } catch (error) {
-    console.error('Error generating text from Gemini:', error);
-    throw error; // Re-throw for handling in UI
-  }
+  return retryWithBackoff(async () => {
+    try {
+      const client = getClient();
+      const params: GenerateContentParameters = {
+        model: MODEL_TEXT,
+        contents: prompt,
+        // config: { // Optional: add specific config if needed
+        //   temperature: 0.7,
+        // }
+      };
+      const response: GenerateContentResponse = await client.models.generateContent(params);
+      return response.text;
+    } catch (error) {
+      console.error('Error generating text from Gemini:', error);
+      throw error; // Re-throw for handling in retry mechanism
+    }
+  });
 };
 
 export interface MultiFunctionalResponse {
@@ -49,71 +87,76 @@ export const generateMultiFunctionalResponse = async (
     prompt: string, 
     files: { name: string; mimeType: string; data: string }[]
 ): Promise<MultiFunctionalResponse> => {
-    const client = getClient();
-    const systemInstruction = `You are a highly intelligent, multi-functional AI assistant within the MasYun Data Analyzer platform. You can analyze data, answer complex questions, generate code, write documents, and create file content based on user requests. When asked to create a file, format your entire response as a raw string containing ONLY the file's content. To specify the filename and type for download, you MUST place a directive on the very first line of your response in the format: [DL_FILENAME: a_good_filename.ext]. If you are just answering a question, do not include the DL_FILENAME directive.`;
-    
-    const contents: any[] = [];
-    if(prompt) contents.push({ text: prompt });
+    return retryWithBackoff(async () => {
+        const client = getClient();
+        const systemInstruction = `You are a highly intelligent, multi-functional AI assistant within the MasYun Data Analyzer platform. You can analyze data, answer complex questions, generate code, write documents, and create file content based on user requests. When asked to create a file, format your entire response as a raw string containing ONLY the file's content. To specify the filename and type for download, you MUST place a directive on the very first line of your response in the format: [DL_FILENAME: a_good_filename.ext]. If you are just answering a question, do not include the DL_FILENAME directive.`;
+        
+        const contents: any[] = [];
+        if(prompt) contents.push({ text: prompt });
 
-    files.forEach(file => {
-        contents.push({ text: `[User has included the file '${file.name}' for analysis]` });
-        contents.push({
-            inlineData: {
-                mimeType: file.mimeType,
-                data: file.data,
-            }
-        });
-    });
-
-    try {
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: { parts: contents },
-            config: {
-                systemInstruction,
-                temperature: 0.6,
-            }
+        files.forEach(file => {
+            contents.push({ text: `[User has included the file '${file.name}' for analysis]` });
+            contents.push({
+                inlineData: {
+                    mimeType: file.mimeType,
+                    data: file.data,
+                }
+            });
         });
 
-        let text = response.text;
-        const firstLineBreak = text.indexOf('\n');
-        const firstLine = firstLineBreak === -1 ? text : text.substring(0, firstLineBreak);
+        try {
+            const response = await client.models.generateContent({
+                model: MODEL_TEXT,
+                contents: { parts: contents },
+                config: {
+                    systemInstruction,
+                    temperature: 0.6,
+                }
+            });
 
-        const dlRegex = /\[DL_FILENAME:\s*(.*?)\s*\]/;
-        const match = firstLine.match(dlRegex);
+            let text = response.text;
+            const firstLineBreak = text.indexOf('\n');
+            const firstLine = firstLineBreak === -1 ? text : text.substring(0, firstLineBreak);
 
-        if (match && match[1]) {
-            const filename = match[1].trim();
-            const content = firstLineBreak === -1 ? '' : text.substring(firstLineBreak + 1);
-            
-            // Basic mime type detection from filename extension
-            const ext = filename.split('.').pop()?.toLowerCase() || '';
-            let mimeType = 'application/octet-stream';
-            if (ext === 'txt') mimeType = 'text/plain';
-            else if (ext === 'csv') mimeType = 'text/csv';
-            else if (ext === 'json') mimeType = 'application/json';
-            else if (ext === 'html') mimeType = 'text/html';
-            else if (ext === 'xml') mimeType = 'application/xml';
-            else if (ext === 'py') mimeType = 'text/x-python';
-            else if (ext === 'js') mimeType = 'application/javascript';
-            else if (ext === 'md') mimeType = 'text/markdown';
-            
-            return {
-                isDownloadable: true,
-                content: content,
-                filename: filename,
-                mimeType: mimeType
-            };
-        } else {
-            return {
-                isDownloadable: false,
-                content: text,
-                filename: '',
-                mimeType: ''
-            };
+            const dlRegex = /\[DL_FILENAME:\s*(.*?)\s*\]/;
+            const match = firstLine.match(dlRegex);
+
+            if (match && match[1]) {
+                const filename = match[1].trim();
+                const content = firstLineBreak === -1 ? '' : text.substring(firstLineBreak + 1);
+                
+                // Basic mime type detection from filename extension
+                const ext = filename.split('.').pop()?.toLowerCase() || '';
+                let mimeType = 'application/octet-stream';
+                if (ext === 'txt') mimeType = 'text/plain';
+                else if (ext === 'csv') mimeType = 'text/csv';
+                else if (ext === 'json') mimeType = 'application/json';
+                else if (ext === 'html') mimeType = 'text/html';
+                else if (ext === 'xml') mimeType = 'application/xml';
+                else if (ext === 'py') mimeType = 'text/x-python';
+                else if (ext === 'js') mimeType = 'application/javascript';
+                else if (ext === 'md') mimeType = 'text/markdown';
+                
+                return {
+                    isDownloadable: true,
+                    content: content,
+                    filename: filename,
+                    mimeType: mimeType
+                };
+            } else {
+                return {
+                    isDownloadable: false,
+                    content: text,
+                    filename: '',
+                    mimeType: ''
+                };
+            }
+        } catch (error) {
+            console.error('Error generating multi-functional response from Gemini:', error);
+            throw error; // Re-throw for retry mechanism
         }
-    } catch (error) {
-        console.error('Error generating multi-functional response from Gemini:', error);
+    }).catch(error => {
+        // Final fallback after all retries failed
         if (error instanceof Error) {
             return {
                 isDownloadable: false,
@@ -128,9 +171,8 @@ export const generateMultiFunctionalResponse = async (
             filename: '',
             mimeType: '',
         };
-    }
+    });
 };
-
 
 export const analyzeSelectedData = async (jsonData: string): Promise<string> => {
     const prompt = `
@@ -147,20 +189,24 @@ export const analyzeSelectedData = async (jsonData: string): Promise<string> => 
         ${jsonData}
     `;
 
-    try {
-        const client = getClient();
-        const response: GenerateContentResponse = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-        });
-        return response.text;
-    } catch (error) {
-        console.error('Error analyzing data with Gemini:', error);
+    return retryWithBackoff(async () => {
+        try {
+            const client = getClient();
+            const response: GenerateContentResponse = await client.models.generateContent({
+                model: MODEL_TEXT,
+                contents: prompt,
+            });
+            return response.text;
+        } catch (error) {
+            console.error('Error analyzing data with Gemini:', error);
+            throw error; // Re-throw for retry mechanism
+        }
+    }).catch(error => {
         if (error instanceof Error) {
             return `Error during analysis: ${error.message}`;
         }
         return 'An unknown error occurred during AI analysis.';
-    }
+    });
 };
 
 export const getStatisticalAnalysis = async (profilingSummary: string, userQuery?: string, isSubset: boolean = false): Promise<string> => {
@@ -189,31 +235,34 @@ export const getStatisticalAnalysis = async (profilingSummary: string, userQuery
         `;
     }
 
-    try {
-        const client = getClient();
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-            config: {
-                systemInstruction: systemInstruction,
-                temperature: 0.5, // Keep it more factual for analysis
-            }
-        });
+    return retryWithBackoff(async () => {
+        try {
+            const client = getClient();
+            const response = await client.models.generateContent({
+                model: MODEL_TEXT,
+                contents: prompt,
+                config: {
+                    systemInstruction: systemInstruction,
+                    temperature: 0.5, // Keep it more factual for analysis
+                }
+            });
 
-        // Parse markdown to HTML for safe rendering.
-        const rawText = response.text;
-        const html = marked.parse(rawText);
-        return html;
+            // Parse markdown to HTML for safe rendering.
+            const rawText = response.text;
+            const html = marked.parse(rawText);
+            return html;
 
-    } catch (error) {
-        console.error('Error getting statistical analysis from Gemini:', error);
+        } catch (error) {
+            console.error('Error getting statistical analysis from Gemini:', error);
+            throw error; // Re-throw for retry mechanism
+        }
+    }).catch(error => {
         if (error instanceof Error) {
             return `<h3>AI Analysis Error</h3><p>An error occurred while communicating with the AI: ${error.message}</p>`;
         }
         return '<h3>AI Analysis Error</h3><p>An unknown error occurred during AI analysis.</p>';
-    }
+    });
 };
-
 
 export const generateDocumentation = async (featuresPrompt: string): Promise<string> => {
     const fullPrompt = `
@@ -233,43 +282,48 @@ export const generateDocumentation = async (featuresPrompt: string): Promise<str
         The color palette should revolve around deep blues, purples, cyans, and magentas, consistent with a "holographic" or "nebula" theme.
     `;
 
-    try {
-        const client = getClient();
-        const response: GenerateContentResponse = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: fullPrompt,
-            config: {
-                // Higher temperature for more creative/descriptive writing
-                temperature: 0.8,
+    return retryWithBackoff(async () => {
+        try {
+            const client = getClient();
+            const response: GenerateContentResponse = await client.models.generateContent({
+                model: MODEL_TEXT,
+                contents: fullPrompt,
+                config: {
+                    // Higher temperature for more creative/descriptive writing
+                    temperature: 0.8,
+                }
+            });
+            let htmlContent = response.text;
+
+            // Clean up the response to ensure it's just HTML
+            const htmlStartIndex = htmlContent.toLowerCase().indexOf('<!doctype html>');
+            if (htmlStartIndex > -1) {
+                htmlContent = htmlContent.substring(htmlStartIndex);
             }
-        });
-        let htmlContent = response.text;
+            const htmlEndIndex = htmlContent.toLowerCase().lastIndexOf('</html>');
+            if (htmlEndIndex > -1) {
+                htmlContent = htmlContent.substring(0, htmlEndIndex + 7);
+            }
+            // Also remove markdown fences if they exist
+            htmlContent = htmlContent.replace(/^```html\s*/, '').replace(/\s*```$/, '');
 
-        // Clean up the response to ensure it's just HTML
-        const htmlStartIndex = htmlContent.toLowerCase().indexOf('<!doctype html>');
-        if (htmlStartIndex > -1) {
-            htmlContent = htmlContent.substring(htmlStartIndex);
+            return htmlContent;
+        } catch (error) {
+            console.error('Error generating documentation with Gemini:', error);
+            throw error; // Re-throw for retry mechanism
         }
-        const htmlEndIndex = htmlContent.toLowerCase().lastIndexOf('</html>');
-        if (htmlEndIndex > -1) {
-            htmlContent = htmlContent.substring(0, htmlEndIndex + 7);
-        }
-        // Also remove markdown fences if they exist
-        htmlContent = htmlContent.replace(/^```html\s*/, '').replace(/\s*```$/, '');
-
-        return htmlContent;
-    } catch (error) {
-        console.error('Error generating documentation with Gemini:', error);
+    }).catch(error => {
         if (error instanceof Error) {
             return `<h1>Error during documentation generation</h1><p>${error.message}</p>`;
         }
         return '<h1>An unknown error occurred during AI analysis.</h1>';
-    }
+    });
 };
 
 export const generateDiagramFromPrompt = async (prompt: string): Promise<{ nodes: any[], edges: any[] }> => {
-    const client = getClient();
-    const systemInstruction = `You are a creative diagram designer. Your task is to generate a JSON object representing a visually appealing diagram from text. The JSON object must have "nodes" and "edges".
+    return retryWithBackoff(async () => {
+        const client = getClient();
+        const systemInstruction = `You are a creative diagram designer. Your task is to generate a JSON object representing a visually appealing diagram from text. The JSON object must have "nodes" and "edges".
 
 - "nodes" is an array. Each node must have:
   - "id": A unique string (e.g., "node-1").
@@ -309,181 +363,197 @@ Example JSON Response:
 }
 `;
 
-    const response = await client.models.generateContent({
-        model: MODEL_TEXT,
-        contents: prompt,
-        config: {
-            systemInstruction,
-            responseMimeType: "application/json",
-            temperature: 0.2, // Lower temperature for more predictable, structured output
+        const response = await client.models.generateContent({
+            model: MODEL_TEXT,
+            contents: prompt,
+            config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                temperature: 0.2, // Lower temperature for more predictable, structured output
+            }
+        });
+
+        let jsonStr = response.text.trim();
+        
+        // The model might return the JSON inside markdown fences, with leading/trailing text.
+        // This logic attempts to extract the core JSON object.
+        const fenceRegex = /```(?:json)?\s*({[\s\S]*?})\s*```/s;
+        const fenceMatch = jsonStr.match(fenceRegex);
+        
+        if (fenceMatch && fenceMatch[1]) {
+            jsonStr = fenceMatch[1];
+        } else {
+            const firstBrace = jsonStr.indexOf('{');
+            const lastBrace = jsonStr.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace > firstBrace) {
+                jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+            }
+        }
+
+        try {
+            const parsedData = JSON.parse(jsonStr);
+            if (parsedData.nodes && parsedData.edges && Array.isArray(parsedData.nodes) && Array.isArray(parsedData.edges)) {
+                // Ensure nodes have a data.style object, even if data or style is missing from the AI response
+                const sanitizedNodes = parsedData.nodes.map((node: any) => ({
+                    ...node,
+                    data: {
+                        ...(node.data || {}),
+                        style: node.data?.style || {}
+                    }
+                }));
+                return { nodes: sanitizedNodes, edges: parsedData.edges };
+            }
+            throw new Error("Invalid JSON structure received from AI: missing 'nodes' or 'edges' array.");
+        } catch (e: any) {
+            console.error("Failed to parse JSON response from AI:", e);
+            console.error("Attempted to parse the following text:", jsonStr);
+            throw new Error(`The AI returned a malformed response that could not be parsed as JSON. Please try again or rephrase your prompt. Error: ${e.message}`);
         }
     });
-
-    let jsonStr = response.text.trim();
-    
-    // The model might return the JSON inside markdown fences, with leading/trailing text.
-    // This logic attempts to extract the core JSON object.
-    const fenceRegex = /```(?:json)?\s*({[\s\S]*?})\s*```/s;
-    const fenceMatch = jsonStr.match(fenceRegex);
-    
-    if (fenceMatch && fenceMatch[1]) {
-        jsonStr = fenceMatch[1];
-    } else {
-        const firstBrace = jsonStr.indexOf('{');
-        const lastBrace = jsonStr.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-            jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-        }
-    }
-
-    try {
-        const parsedData = JSON.parse(jsonStr);
-        if (parsedData.nodes && parsedData.edges && Array.isArray(parsedData.nodes) && Array.isArray(parsedData.edges)) {
-            // Ensure nodes have a data.style object, even if data or style is missing from the AI response
-            const sanitizedNodes = parsedData.nodes.map((node: any) => ({
-                ...node,
-                data: {
-                    ...(node.data || {}),
-                    style: node.data?.style || {}
-                }
-            }));
-            return { nodes: sanitizedNodes, edges: parsedData.edges };
-        }
-        throw new Error("Invalid JSON structure received from AI: missing 'nodes' or 'edges' array.");
-    } catch (e: any) {
-        console.error("Failed to parse JSON response from AI:", e);
-        console.error("Attempted to parse the following text:", jsonStr);
-        throw new Error(`The AI returned a malformed response that could not be parsed as JSON. Please try again or rephrase your prompt. Error: ${e.message}`);
-    }
 };
 
 // --- NEW: Enhanced Route Planner Functions ---
 
 export const geocodeAddressWithGemini = async (address: string): Promise<LatLngTuple | { error: string }> => {
-    try {
-        const client = getClient();
-        const prompt = `Convert this address to latitude and longitude coordinates: "${address}". 
-        Respond ONLY with the coordinates in the format: latitude,longitude (e.g., -6.2088,106.8456).
-        If you cannot determine the coordinates, respond with "ERROR: Unable to geocode address".`;
-        
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-            config: {
-                temperature: 0.1, // Very low temperature for factual responses
+    return retryWithBackoff(async () => {
+        try {
+            const client = getClient();
+            const prompt = `Convert this address to latitude and longitude coordinates: "${address}". 
+            Respond ONLY with the coordinates in the format: latitude,longitude (e.g., -6.2088,106.8456).
+            If you cannot determine the coordinates, respond with "ERROR: Unable to geocode address".`;
+            
+            const response = await client.models.generateContent({
+                model: MODEL_TEXT,
+                contents: prompt,
+                config: {
+                    temperature: 0.1, // Very low temperature for factual responses
+                }
+            });
+            
+            const text = response.text.trim();
+            
+            if (text.startsWith('ERROR:')) {
+                return { error: text.replace('ERROR:', '').trim() };
             }
-        });
-        
-        const text = response.text.trim();
-        
-        if (text.startsWith('ERROR:')) {
-            return { error: text.replace('ERROR:', '').trim() };
+            
+            const coords = text.split(',').map(coord => parseFloat(coord.trim()));
+            if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+                return [coords[0], coords[1]];
+            }
+            
+            return { error: 'Invalid coordinate format received from AI' };
+        } catch (error) {
+            console.error('Error geocoding with Gemini:', error);
+            throw error; // Re-throw for retry mechanism
         }
-        
-        const coords = text.split(',').map(coord => parseFloat(coord.trim()));
-        if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-            return [coords[0], coords[1]];
-        }
-        
-        return { error: 'Invalid coordinate format received from AI' };
-    } catch (error) {
-        console.error('Error geocoding with Gemini:', error);
-        return { error: 'Failed to geocode address' };
-    }
+    }).catch(error => {
+        console.error('Final geocoding error after retries:', error);
+        return { error: 'Failed to geocode address after multiple attempts. Please try again later.' };
+    });
 };
 
 export const reverseGeocodeWithGemini = async (lat: number, lng: number): Promise<{ address: string; city: string } | { error: string }> => {
-    try {
-        const client = getClient();
-        const prompt = `Convert these coordinates to a readable address and city name: ${lat}, ${lng}
-        
-        Respond in this exact format:
-        ADDRESS: [full street address or landmark name]
-        CITY: [city name, country]
-        
-        If you cannot determine the location, respond with:
-        ERROR: Unable to reverse geocode coordinates`;
-        
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-            config: {
-                temperature: 0.1,
-            }
-        });
-        
-        const text = response.text.trim();
-        
-        if (text.startsWith('ERROR:')) {
-            return { error: text.replace('ERROR:', '').trim() };
-        }
-        
-        const addressMatch = text.match(/ADDRESS:\s*(.+)/);
-        const cityMatch = text.match(/CITY:\s*(.+)/);
-        
-        if (addressMatch && cityMatch) {
-            return {
-                address: addressMatch[1].trim(),
-                city: cityMatch[1].trim()
-            };
-        }
-        
-        return { error: 'Invalid response format from AI' };
-    } catch (error) {
-        console.error('Error reverse geocoding with Gemini:', error);
-        return { error: 'Failed to reverse geocode coordinates' };
-    }
-};
-
-export const findNearestValidCoordinates = async (lat: number, lng: number): Promise<{ coordinates: LatLngTuple; address: string; city: string } | { error: string }> => {
-    try {
-        const client = getClient();
-        const prompt = `The coordinates ${lat}, ${lng} appear to be invalid or in an inaccessible location. 
-        Find the nearest valid, accessible location (like a nearby city, landmark, or populated area) and provide:
-        
-        COORDINATES: [latitude,longitude]
-        ADDRESS: [readable address or landmark name]
-        CITY: [city name, country]
-        
-        If you cannot find a suitable nearby location, respond with:
-        ERROR: No valid nearby location found`;
-        
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-            config: {
-                temperature: 0.2,
-            }
-        });
-        
-        const text = response.text.trim();
-        
-        if (text.startsWith('ERROR:')) {
-            return { error: text.replace('ERROR:', '').trim() };
-        }
-        
-        const coordsMatch = text.match(/COORDINATES:\s*([^,]+),\s*(.+)/);
-        const addressMatch = text.match(/ADDRESS:\s*(.+)/);
-        const cityMatch = text.match(/CITY:\s*(.+)/);
-        
-        if (coordsMatch && addressMatch && cityMatch) {
-            const newLat = parseFloat(coordsMatch[1].trim());
-            const newLng = parseFloat(coordsMatch[2].trim());
+    return retryWithBackoff(async () => {
+        try {
+            const client = getClient();
+            const prompt = `Convert these coordinates to a readable address and city name: ${lat}, ${lng}
             
-            if (!isNaN(newLat) && !isNaN(newLng)) {
+            Respond in this exact format:
+            ADDRESS: [full street address or landmark name]
+            CITY: [city name, country]
+            
+            If you cannot determine the location, respond with:
+            ERROR: Unable to reverse geocode coordinates`;
+            
+            const response = await client.models.generateContent({
+                model: MODEL_TEXT,
+                contents: prompt,
+                config: {
+                    temperature: 0.1,
+                }
+            });
+            
+            const text = response.text.trim();
+            
+            if (text.startsWith('ERROR:')) {
+                return { error: text.replace('ERROR:', '').trim() };
+            }
+            
+            const addressMatch = text.match(/ADDRESS:\s*(.+)/);
+            const cityMatch = text.match(/CITY:\s*(.+)/);
+            
+            if (addressMatch && cityMatch) {
                 return {
-                    coordinates: [newLat, newLng],
                     address: addressMatch[1].trim(),
                     city: cityMatch[1].trim()
                 };
             }
+            
+            return { error: 'Invalid response format from AI' };
+        } catch (error) {
+            console.error('Error reverse geocoding with Gemini:', error);
+            throw error; // Re-throw for retry mechanism
         }
-        
-        return { error: 'Invalid response format from AI' };
-    } catch (error) {
-        console.error('Error finding nearest valid coordinates:', error);
-        return { error: 'Failed to find nearest valid location' };
-    }
+    }).catch(error => {
+        console.error('Final reverse geocoding error after retries:', error);
+        return { error: 'Failed to reverse geocode coordinates after multiple attempts. Please try again later.' };
+    });
+};
+
+export const findNearestValidCoordinates = async (lat: number, lng: number): Promise<{ coordinates: LatLngTuple; address: string; city: string } | { error: string }> => {
+    return retryWithBackoff(async () => {
+        try {
+            const client = getClient();
+            const prompt = `The coordinates ${lat}, ${lng} appear to be invalid or in an inaccessible location. 
+            Find the nearest valid, accessible location (like a nearby city, landmark, or populated area) and provide:
+            
+            COORDINATES: [latitude,longitude]
+            ADDRESS: [readable address or landmark name]
+            CITY: [city name, country]
+            
+            If you cannot find a suitable nearby location, respond with:
+            ERROR: No valid nearby location found`;
+            
+            const response = await client.models.generateContent({
+                model: MODEL_TEXT,
+                contents: prompt,
+                config: {
+                    temperature: 0.2,
+                }
+            });
+            
+            const text = response.text.trim();
+            
+            if (text.startsWith('ERROR:')) {
+                return { error: text.replace('ERROR:', '').trim() };
+            }
+            
+            const coordsMatch = text.match(/COORDINATES:\s*([^,]+),\s*(.+)/);
+            const addressMatch = text.match(/ADDRESS:\s*(.+)/);
+            const cityMatch = text.match(/CITY:\s*(.+)/);
+            
+            if (coordsMatch && addressMatch && cityMatch) {
+                const newLat = parseFloat(coordsMatch[1].trim());
+                const newLng = parseFloat(coordsMatch[2].trim());
+                
+                if (!isNaN(newLat) && !isNaN(newLng)) {
+                    return {
+                        coordinates: [newLat, newLng],
+                        address: addressMatch[1].trim(),
+                        city: cityMatch[1].trim()
+                    };
+                }
+            }
+            
+            return { error: 'Invalid response format from AI' };
+        } catch (error) {
+            console.error('Error finding nearest valid coordinates:', error);
+            throw error; // Re-throw for retry mechanism
+        }
+    }).catch(error => {
+        console.error('Final nearest coordinates error after retries:', error);
+        return { error: 'Failed to find nearest valid location after multiple attempts. Please try again later.' };
+    });
 };
 
 export const getRouteAnalysisForDisplay = async (
@@ -494,37 +564,42 @@ export const getRouteAnalysisForDisplay = async (
     travelMode: string,
     country: string
 ): Promise<string> => {
-    try {
-        const client = getClient();
-        const prompt = `Provide a brief route analysis for travel in ${country}:
-        From: ${fromLocation}
-        To: ${toLocation}
-        Distance: ${distance || 'Unknown'}
-        Estimated Duration: ${duration || 'Unknown'}
-        Travel Mode: ${travelMode}
-        
-        Provide insights about:
-        - Route characteristics and terrain
-        - Traffic considerations
-        - Best travel times
-        - Alternative transportation options
-        - Local travel tips
-        
-        Keep response under 150 words and use markdown formatting.`;
-        
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-            config: {
-                temperature: 0.7,
-            }
-        });
-        
-        return response.text;
-    } catch (error) {
-        console.error('Error getting route analysis:', error);
-        return 'Unable to generate route analysis at this time.';
-    }
+    return retryWithBackoff(async () => {
+        try {
+            const client = getClient();
+            const prompt = `Provide a brief route analysis for travel in ${country}:
+            From: ${fromLocation}
+            To: ${toLocation}
+            Distance: ${distance || 'Unknown'}
+            Estimated Duration: ${duration || 'Unknown'}
+            Travel Mode: ${travelMode}
+            
+            Provide insights about:
+            - Route characteristics and terrain
+            - Traffic considerations
+            - Best travel times
+            - Alternative transportation options
+            - Local travel tips
+            
+            Keep response under 150 words and use markdown formatting.`;
+            
+            const response = await client.models.generateContent({
+                model: MODEL_TEXT,
+                contents: prompt,
+                config: {
+                    temperature: 0.7,
+                }
+            });
+            
+            return response.text;
+        } catch (error) {
+            console.error('Error getting route analysis:', error);
+            throw error; // Re-throw for retry mechanism
+        }
+    }).catch(error => {
+        console.error('Final route analysis error after retries:', error);
+        return 'Unable to generate route analysis at this time. Please try again later.';
+    });
 };
 
 export const analyzeTextWithGemini = async (
@@ -532,30 +607,37 @@ export const analyzeTextWithGemini = async (
     context?: string,
     responseType: 'text' | 'json' = 'text'
 ): Promise<{ type: 'text' | 'error'; content: string }> => {
-    try {
-        const client = getClient();
-        let fullPrompt = prompt;
-        if (context) {
-            fullPrompt = `Context: ${context}\n\nQuery: ${prompt}`;
-        }
-        
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: fullPrompt,
-            config: {
-                temperature: 0.6,
-                responseMimeType: responseType === 'json' ? 'application/json' : undefined,
+    return retryWithBackoff(async () => {
+        try {
+            const client = getClient();
+            let fullPrompt = prompt;
+            if (context) {
+                fullPrompt = `Context: ${context}\n\nQuery: ${prompt}`;
             }
-        });
-        
-        return { type: 'text', content: response.text };
-    } catch (error) {
-        console.error('Error analyzing text with Gemini:', error);
+            
+            const response = await client.models.generateContent({
+                model: MODEL_TEXT,
+                contents: fullPrompt,
+                config: {
+                    temperature: 0.6,
+                    responseMimeType: responseType === 'json' ? 'application/json' : undefined,
+                }
+            });
+            
+            return { type: 'text', content: response.text };
+        } catch (error) {
+            console.error('Error analyzing text with Gemini:', error);
+            throw error; // Re-throw for retry mechanism
+        }
+    }).catch(error => {
+        console.error('Final text analysis error after retries:', error);
         return { 
             type: 'error', 
-            content: error instanceof Error ? error.message : 'Unknown error occurred' 
+            content: error instanceof Error ? 
+                `Analysis failed after multiple attempts: ${error.message}` : 
+                'Unknown error occurred during text analysis. Please try again later.' 
         };
-    }
+    });
 };
 
 // You could add functions for image generation, specific data analysis prompts, etc.
@@ -565,4 +647,4 @@ export const analyzeTextWithGemini = async (
 //   return generateText(prompt);
 // };
 
-console.log('Gemini Service initialized. Ensure API_KEY is set in your environment.');
+console.log('Gemini Service initialized with retry mechanism. Ensure API_KEY is set in your environment.');
