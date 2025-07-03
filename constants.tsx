@@ -91,14 +91,17 @@ const DiagramIcon: IconType = ({ className }) => (
 );
 
 const RouteIcon: IconType = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="6" cy="18" r="3"></circle>
+        <circle cx="18" cy="6" r="3"></circle>
+        <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
+        <path d="M6 18v-7a2 2 0 0 1 2-2h3"></path>
     </svg>
 );
 
-const MilestoneIcon: IconType = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" />
+const MapIcon: IconType = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m0 0v2.25m0-2.25h3.75m-3.75 0H6.75m0-4.5L12 12m0 0l3.25 3.25M12 12L6.75 8.25M12 12l3.25-3.25m-3.25 3.25L6.75 15m3.25-3.25L12 21l3.25-3.25M12 3v2.25m0 16.5v-2.25M3.75 12h16.5c.621 0 1.125-.504 1.125-1.125V6.75c0-.621-.504-1.125-1.125-1.125H3.75c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125z" />
     </svg>
 );
 
@@ -116,9 +119,8 @@ export const DOCK_ITEMS: DockItemConfig[] = [
   { id: 'dataUpload', label: 'Upload Data', icon: UploadIcon },
   { id: 'dataTable', label: 'Data Table', icon: TableIcon },
   { id: 'visualizations', label: 'Charts', icon: ChartIcon },
+  { id: 'map', label: 'Map View', icon: MapIcon },
   { id: 'pivotTable', label: 'Pivot Table', icon: PivotIcon },
-  { id: 'routePlanner', label: 'Route Planner', icon: RouteIcon },
-  { id: 'milestonePlanner', label: 'Milestone Planner', icon: MilestoneIcon },
   { id: 'aiAssistant', label: 'AI Assistant', icon: AIAssistantIcon },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
@@ -139,11 +141,19 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     items: [
         { name: "Data Explorer", icon: TableIcon, viewId: 'dataTable'},
         { name: "Visualizations", icon: ChartIcon, viewId: 'visualizations'},
+        { name: "Map View", icon: MapIcon, viewId: 'map' },
         { name: "Pivot Tables", icon: PivotIcon, viewId: 'pivotTable'},
-        { name: "Route Planner", icon: RouteIcon, viewId: 'routePlanner'},
-        { name: "Milestone Planner", icon: MilestoneIcon, viewId: 'milestonePlanner'},
         { name: "Diagramming Matrix", icon: DiagramIcon, viewId: 'diagrammingMatrix' },
         { name: "Statistical Analysis", icon: StatsIcon, viewId: 'statisticalAnalysis' },
+        { name: "Route Planner", icon: RouteIcon, viewId: 'routePlanner' },
+    ]
+  },
+  {
+    title: "Recent Projects", 
+    items: [
+      { name: "Sales Analysis Q3", icon: ProjectIcon, viewId: 'projectDetails' },
+      { name: "Marketing Campaign", icon: ProjectIcon, viewId: 'projectDetails' },
+      { name: "Customer Behavior", icon: ProjectIcon, viewId: 'projectDetails' },
     ]
   },
   {
@@ -160,13 +170,10 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
         name: "File",
         subItems: [
             { name: "New Project", viewId: 'genericPlaceholder' },
-            { name: "Open Project", viewId: 'genericPlaceholder' },
-            { name: "Save Project", viewId: 'genericPlaceholder' },
-            { name: "Save As...", viewId: 'genericPlaceholder' },
+            { name: "Open...", viewId: 'genericPlaceholder' },
+            { name: "Save", viewId: 'genericPlaceholder' },
             { name: "Import Data", viewId: 'dataUpload' },
-            { name: "Export Data", viewId: 'genericPlaceholder' },
-            { name: "Export Chart", viewId: 'genericPlaceholder' },
-            { name: "Print", viewId: 'genericPlaceholder' }
+            { name: "Export", viewId: 'genericPlaceholder' }
         ]
     },
     {
@@ -176,9 +183,7 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
             { name: "Redo", viewId: 'genericPlaceholder' }, 
             { name: "Cut", viewId: 'genericPlaceholder' }, 
             { name: "Copy", viewId: 'genericPlaceholder' }, 
-            { name: "Paste", viewId: 'genericPlaceholder' },
-            { name: "Select All", viewId: 'genericPlaceholder' },
-            { name: "Find & Replace", viewId: 'genericPlaceholder' }
+            { name: "Paste", viewId: 'genericPlaceholder' }
         ]
     },
     {
@@ -187,10 +192,9 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
             { name: "Welcome", viewId: 'welcome' },
             { name: "Dashboard", viewId: 'dashboard' },
             { name: "Data Explorer", viewId: 'dataTable' },
-            { name: "Pivot Tables", viewId: 'pivotTable' },
+            { name: "Map View", viewId: 'map'},
+            { name: "Pivot Tables", viewId: 'pivotTable' }, // Updated viewId
             { name: "Visualizations", viewId: 'visualizations' },
-            { name: "Route Planner", viewId: 'routePlanner' },
-            { name: "Milestone Planner", viewId: 'milestonePlanner' },
             { name: "AI Assistant", viewId: 'aiAssistant' } 
         ]
     },
@@ -199,8 +203,6 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
         subItems: [
             { name: "Data Cleaning", viewId: 'genericPlaceholder' }, 
             { name: "Statistical Analysis", viewId: 'statisticalAnalysis' }, 
-            { name: "Route Planning", viewId: 'routePlanner' },
-            { name: "Milestone Planning", viewId: 'milestonePlanner' },
             { name: "Machine Learning", viewId: 'genericPlaceholder' },
             { name: "Report Generator", viewId: 'genericPlaceholder' }
         ]
@@ -292,43 +294,50 @@ export const RAW_COLOR_VALUES: Record<string, string> = {
   'green-400': '#00FF88',
   'yellow-400': '#FF6B35',
   'gray-900': '#0A0F1E',
+  'gray-200': '#e5e7eb',
   'pink-500': '#ec4899',
   'cyan-400': '#22d3ee',
   'amber-500': '#f59e0b',
   'lime-500': '#84cc16',
   'violet-500': '#8b5cf6',
+  'accent1': '#00D4FF',
+  'accent2': '#8B5CF6',
+  'accent3': '#00FF88',
+  'accent4': '#FF6B35',
+  'darkGray': '#111827',
+  'mediumGray': '#374151',
+  'lightGray': '#9ca3af',
+  'textColor': 'text-gray-200',
 };
 
-// --- NEW: Route Planner Constants ---
-export const COUNTRIES_DATA: CountryInfo[] = [
-  { code: 'ID', name: 'Indonesia' },
-  { code: 'MY', name: 'Malaysia' },
-  { code: 'SG', name: 'Singapore' },
-  { code: 'TH', name: 'Thailand' },
-  { code: 'VN', name: 'Vietnam' },
-  { code: 'PH', name: 'Philippines' },
-  { code: 'US', name: 'United States' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'DE', name: 'Germany' },
-  { code: 'FR', name: 'France' },
-  { code: 'JP', name: 'Japan' },
-  { code: 'CN', name: 'China' },
-  { code: 'IN', name: 'India' },
-  { code: 'AU', name: 'Australia' },
-  { code: 'CA', name: 'Canada' },
-  { code: 'BR', name: 'Brazil' }
-];
+// --- NEW CONSTANTS FOR ROUTE PLANNER ---
 
-export const AVERAGE_TRAVEL_SPEED_KMH = 60; // Average speed for straight-line calculations
+export const AVERAGE_TRAVEL_SPEED_KMH = 80;
 
-export const TRAVEL_MODES: { value: TravelMode; label: string }[] = [
+export const TRAVEL_MODES: { value: TravelMode, label: string }[] = [
   { value: 'DRIVING', label: 'Driving' },
   { value: 'WALKING', label: 'Walking' },
-  { value: 'CYCLING', label: 'Cycling' }
+  { value: 'CYCLING', label: 'Cycling' },
 ];
 
 export const HEURISTIC_TRAVEL_FACTORS: Record<TravelMode, number> = {
-  DRIVING: 1.4, // Roads are typically 40% longer than straight line
-  WALKING: 1.2, // Walking paths are typically 20% longer
-  CYCLING: 1.3  // Cycling routes are typically 30% longer
+  DRIVING: 1.4, // Accounts for traffic, non-straight roads
+  WALKING: 1.2, // Accounts for taking paths, stopping
+  CYCLING: 1.3, // Accounts for traffic, roads, elevation
 };
+
+export const CONTINENTS = ['Africa', 'Asia', 'Europe', 'North America', 'Oceania', 'South America'];
+
+export const COUNTRIES_DATA: CountryInfo[] = [
+  { "code": "ID", "name": "Indonesia" },
+  { "code": "US", "name": "United States" },
+  { "code": "CA", "name": "Canada" },
+  { "code": "GB", "name": "United Kingdom" },
+  { "code": "AU", "name": "Australia" },
+  { "code": "DE", "name": "Germany" },
+  { "code": "FR", "name": "France" },
+  { "code": "JP", "name": "Japan" },
+  { "code": "IN", "name": "India" },
+  { "code": "BR", "name": "Brazil" },
+  { "code": "CN", "name": "China" },
+];

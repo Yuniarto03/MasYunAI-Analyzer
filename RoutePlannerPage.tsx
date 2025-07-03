@@ -1,108 +1,33 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+
+import React, { useState, useContext, useEffect, useRef, useCallback } from 'react';
 import { useDropzone, FileWithPath } from 'react-dropzone';
 import * as XLSX from 'xlsx';
-import { Theme, RouteResult, CountryInfo, RouteCalculation, BulkRouteResultItem, LatLngTuple, TravelMode } from '../../types';
-import { RAW_COLOR_VALUES, COUNTRIES_DATA, AVERAGE_TRAVEL_SPEED_KMH, TRAVEL_MODES, HEURISTIC_TRAVEL_FACTORS } from '../../constants';
+import { AppContext } from '../contexts/AppContext';
+import { AppContextType, RouteResult, CountryInfo, RouteCalculation, BulkRouteResultItem, LatLngTuple, TravelMode } from '../types';
+import Button from './shared/Button';
+import Input from './shared/Input';
+import { RAW_COLOR_VALUES, COUNTRIES_DATA, AVERAGE_TRAVEL_SPEED_KMH, TRAVEL_MODES, HEURISTIC_TRAVEL_FACTORS } from '../constants';
 import { MapPin, Navigation, AlertTriangle, CheckCircle, Calculator, Route, Info, Download, UploadCloud, Trash2, Clock, PlusCircle, Brain, Play, ChevronDown, ChevronUp, Bike, Car, PersonStanding } from 'lucide-react';
-import FuturisticBackground from '../FuturisticBackground';
-import { geocodeAddressWithGemini, getRouteAnalysisForDisplay, analyzeTextWithGemini } from '../../services/geminiService';
+import FuturisticBackground from './shared/FuturisticBackground';
+import { geocodeAddressWithGemini, getRouteAnalysisForDisplay, analyzeTextWithGemini } from '../services/geminiService';
+import { getSharedSelectBaseStyles } from '../utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { exportRouteResultsToXLSX } from '../../services/DataProcessingService';
+import LoadingSpinner from './shared/LoadingSpinner';
+import { exportRouteResultsToXLSX } from '../services/DataProcessingService';
 
 const MAX_ROUTES = 5;
 const ROUTE_COLORS_KEYS = ['accent1', 'accent2', 'accent3', 'accent4', 'pink-500'];
 
-// --- Helper Components (defined locally to avoid dependency issues) ---
-
-const LoadingSpinner: React.FC<{ text?: string; size?: 'sm' | 'md' | 'lg' }> = ({ text, size = 'md' }) => {
-  const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-8 h-8', 
-    lg: 'w-12 h-12'
-  };
-  
-  return (
-    <div className="flex items-center justify-center gap-3">
-      <div className={`${sizeClasses[size]} border-4 border-t-transparent border-purple-500 rounded-full animate-spin`}></div>
-      {text && <span className="text-purple-300 animate-pulse">{text}</span>}
-    </div>
-  );
-};
-
-const Button: React.FC<{
-  children: React.ReactNode;
-  onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
-  disabled?: boolean;
-  isLoading?: boolean;
-  leftIcon?: React.ReactNode;
-  className?: string;
-  title?: string;
-  ['aria-label']?: string;
-}> = ({ children, onClick, variant = 'primary', size = 'md', disabled, isLoading, leftIcon, className = '', ...props }) => {
-  const baseClasses = 'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900';
-  
-  const variantClasses = {
-    primary: 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white focus:ring-blue-400',
-    secondary: 'bg-gray-700 hover:bg-gray-600 text-gray-200 focus:ring-gray-500',
-    danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-400',
-    ghost: 'bg-transparent hover:bg-gray-700 text-gray-300 hover:text-white focus:ring-gray-500'
-  };
-  
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base'
-  };
-  
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || isLoading}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${disabled || isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'} ${className}`}
-      {...props}
-    >
-      {isLoading ? <LoadingSpinner size="sm" /> : leftIcon}
-      {children}
-    </button>
-  );
-};
-
-const Input: React.FC<{
-  type?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder?: string;
-  className?: string;
-  id?: string;
-}> = ({ type = 'text', value, onChange, placeholder, className = '', id }) => {
-  return (
-    <input
-      type={type}
-      id={id}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className={`w-full p-2 bg-gray-700 text-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600 transition-colors ${className}`}
-    />
-  );
-};
-
-interface RoutePlannerViewProps {
-  theme: Theme;
-  reduceMotion: boolean;
-}
-
-export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduceMotion }) => {
+const RoutePlannerPage: React.FC = () => {
+  const { theme, reduceMotion } = useContext(AppContext) as AppContextType;
   
   const [routeCalculations, setRouteCalculations] = useState<RouteCalculation[]>(() => [
     { 
       id: `route-${Date.now()}`, 
       locationAInput: '', 
       locationBInput: '', 
-      travelMode: 'DRIVING',
+      travelMode: 'DRIVING', // Default travel mode
       result: null, 
       color: RAW_COLOR_VALUES[ROUTE_COLORS_KEYS[0]] || '#00D4FF',
       aiRouteAnalysis: null,
@@ -122,24 +47,11 @@ export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduc
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
   const [isAiAnalysisLoading, setIsAiAnalysisLoading] = useState<boolean>(false);
 
+  // State for minimizing sections
   const [isManualInputMinimized, setIsManualInputMinimized] = useState<boolean>(false);
   const [isBulkProcessingMinimized, setIsBulkProcessingMinimized] = useState<boolean>(true);
   const [isGlobalAiAnalysisMinimized, setIsGlobalAiAnalysisMinimized] = useState<boolean>(true);
 
-  const getSelectStyles = useCallback((currentTheme: Theme) => {
-    return {
-        baseClassName: 'p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 border transition-colors',
-        style: {
-            backgroundColor: RAW_COLOR_VALUES[currentTheme.darkGray] || '#1f2937',
-            color: RAW_COLOR_VALUES[(currentTheme.textColor || 'text-gray-200').replace('text-', '')] || '#e5e7eb',
-            borderColor: RAW_COLOR_VALUES[currentTheme.mediumGray] || '#4b5563'
-        },
-        optionStyle: {
-            backgroundColor: RAW_COLOR_VALUES[currentTheme.darkGray] || '#1f2937',
-            color: RAW_COLOR_VALUES[(currentTheme.textColor || 'text-gray-200').replace('text-', '')] || '#e5e7eb'
-        }
-    };
-  }, []);
 
   const parseCoordinates = (input: string): LatLngTuple | null => {
     const parts = input.split(',').map(part => part.trim());
@@ -294,7 +206,7 @@ export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduc
                     singleResult.originalInputB || rc.locationBInput, 
                     singleResult.straightLineDistanceKm, 
                     singleResult.estimatedTravelDurationHours,
-                    singleResult.travelMode || rc.travelMode,
+                    singleResult.travelMode || rc.travelMode, // Use travelMode from result or from input
                     COUNTRIES_DATA.find(c => c.code === selectedCountryCode)?.name || "Global"
                 );
             } catch (aiError) {
@@ -481,7 +393,7 @@ export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduc
 
   const cardHoverClass = reduceMotion ? '' : `hover:shadow-neon-glow-${theme.accent1}/50 transition-shadow duration-300`;
   const animationClass = reduceMotion ? '' : 'animate-fade-in';
-  const selectStyles = getSelectStyles(theme);
+  const selectStyles = getSharedSelectBaseStyles(theme);
   const contentAnimationClasses = `${reduceMotion ? '' : 'transition-all duration-500 ease-in-out'} overflow-hidden`;
 
   const travelModeIcon = (mode: TravelMode) => {
@@ -500,6 +412,7 @@ export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduc
             Perencana & Analis Rute (Beta)
         </h1>
 
+        {/* Manual Route Input Section */}
         <div className={`${theme.cardBg} p-4 rounded-xl shadow-xl border ${theme.borderColor} mb-6`}>
           <div className="flex justify-between items-center mb-3 cursor-pointer" onClick={() => setIsManualInputMinimized(!isManualInputMinimized)}>
             <h2 className={`text-lg font-semibold text-${theme.accent1}`}>Konfigurasi & Input Rute Manual</h2>
@@ -641,7 +554,7 @@ export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduc
             {isBulkLoading && <div className="mt-3 flex justify-center"><LoadingSpinner text="Memproses rute massal..." /></div>}
             {bulkFileProcessingError && <div className={`my-2 p-2 rounded-md bg-${theme.accent4}/20 border border-${theme.accent4} text-${theme.accent4} text-xs flex items-center gap-1`}><AlertTriangle size={14}/>{bulkFileProcessingError}</div>}
             {bulkRouteResults.length > 0 && (
-                <div className={`mt-4 max-h-80 overflow-y-auto futuristic-scrollbar border ${theme.borderColor} rounded-md`}>
+                <div className="mt-4 max-h-80 overflow-y-auto futuristic-scrollbar border ${theme.borderColor} rounded-md">
                     <table className="min-w-full text-xs">
                         <thead className={`bg-${theme.mediumGray} sticky top-0 z-10`}><tr className="text-left">
                             <th className="p-1.5">Dari (Input)</th><th className="p-1.5">Ke (Input)</th><th className="p-1.5">Mode</th><th className="p-1.5">Jarak</th><th className="p-1.5">Estimasi Waktu</th><th className="p-1.5">Status</th>
@@ -679,7 +592,7 @@ export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduc
               </Button>
             </div>
             <div className={`${contentAnimationClasses} ${isGlobalAiAnalysisMinimized ? 'max-h-0 opacity-0' : 'max-h-[1000px] opacity-100'}`}>
-              <textarea value={aiAnalysisInstruction} onChange={(e) => setAiAnalysisInstruction(e.target.value)} placeholder="Masukkan perintah/pertanyaan Anda untuk AI tentang semua rute yang dihitung (misalnya, 'Bandingkan semua rute', 'Rute mana yang paling efisien?', 'Buat ringkasan potensi tantangan untuk semua rute')." rows={3} className={`w-full p-2 border rounded-md text-xs futuristic-scrollbar bg-${theme.darkGray}/50 border-${theme.mediumGray} focus:ring-1 focus:ring-${theme.accent1} focus:border-${theme.accent1}`} style={{color: RAW_COLOR_VALUES[(theme.textColor || '').replace('text-','')]}}/>
+              <textarea value={aiAnalysisInstruction} onChange={(e) => setAiAnalysisInstruction(e.target.value)} placeholder="Masukkan perintah/pertanyaan Anda untuk AI tentang semua rute yang dihitung (misalnya, 'Bandingkan semua rute', 'Rute mana yang paling efisien?', 'Buat ringkasan potensi tantangan untuk semua rute')." rows={3} className={`w-full p-2 border rounded-md text-xs futuristic-scrollbar bg-${theme.darkGray}/50 border-${theme.mediumGray} focus:ring-1 focus:ring-${theme.accent1} focus:border-${theme.accent1}`} style={{color: RAW_COLOR_VALUES[theme.textColor.replace('text-','')]}}/>
               <Button onClick={handleGenerateGlobalAiAnalysis} variant="primary" size="sm" isLoading={isAiAnalysisLoading} disabled={isAiAnalysisLoading || !aiAnalysisInstruction.trim() || routeCalculations.every(rc => rc.result?.status !== 'success')} className="mt-2 w-full md:w-auto" leftIcon={<Play size={14}/>}>Generate Analisis Global</Button>
               {isAiAnalysisLoading && <div className="mt-3 flex justify-center"><LoadingSpinner text="AI sedang menganalisis rute..." /></div>}
               {aiAnalysisResult && !isAiAnalysisLoading && (<div className={`mt-3 p-3 border rounded-md bg-${theme.darkGray}/30 border-${theme.mediumGray} max-h-60 overflow-y-auto futuristic-scrollbar text-xs`}><ReactMarkdown remarkPlugins={[remarkGfm]}>{aiAnalysisResult}</ReactMarkdown></div>)}
@@ -689,3 +602,5 @@ export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduc
     </div>
   );
 };
+
+export default RoutePlannerPage;

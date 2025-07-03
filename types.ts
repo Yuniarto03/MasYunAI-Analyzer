@@ -2,6 +2,7 @@ import React from 'react';
 
 export interface IconProps {
   className?: string;
+  size?: number;
 }
 export type IconType = React.FC<IconProps>;
 
@@ -60,7 +61,7 @@ export type ViewKey =
   | 'aiAssistant'
   | 'diagrammingMatrix'
   | 'routePlanner'
-  | 'milestonePlanner';
+  | 'map';
 
 export interface NavSubMenuItemConfig {
     name: string;
@@ -266,9 +267,8 @@ export interface Theme {
   textColor: string;
   cardBg: string;
   borderColor: string;
-  mediumGray: string;
   darkGray: string;
-  contentBg: string;
+  mediumGray: string;
 }
 
 // --- NEW TYPES FOR DIAGRAMMING MATRIX ---
@@ -283,11 +283,13 @@ export interface DiagramNodeStyle {
     shadow: boolean;
     backgroundImage: string;
     icon: string;
+    imageFit?: 'cover' | 'contain' | 'fill';
+    filter?: string; // For CSS filters like grayscale, brightness etc.
 }
 
 export interface DiagramNode {
     id: string;
-    type: 'rectangle' | 'ellipse' | 'diamond' | 'text';
+    type: 'rectangle' | 'ellipse' | 'diamond' | 'text' | 'image';
     position: { x: number; y: number };
     size: { width: number; height: number };
     data: {
@@ -302,10 +304,12 @@ export interface DiagramEdge {
     target: string;
     label?: string;
     style?: {
+        type?: 'curved' | 'straight' | 'orthogonal';
         stroke: string;
         strokeWidth: number;
         strokeDasharray?: string;
-        arrowHead?: 'arrow' | 'circle' | 'none';
+        arrowHead?: 'arrow' | 'circle' | 'none' | 'openArrow' | 'diamond';
+        midpoint?: { x: number; y: number };
     };
 }
 
@@ -322,13 +326,7 @@ export interface DiagramTheme {
 
 // --- NEW TYPES FOR ROUTE PLANNER ---
 export type LatLngTuple = [number, number];
-
 export type TravelMode = 'DRIVING' | 'WALKING' | 'CYCLING';
-
-export interface CountryInfo {
-  code: string;
-  name: string;
-}
 
 export interface RouteResult {
   straightLineDistanceKm: string | null;
@@ -336,14 +334,14 @@ export interface RouteResult {
   estimatedTravelDurationHours: string | null;
   travelMode: TravelMode;
   error: string | null;
-  calculationType: string | null;
-  status: 'pending' | 'success' | 'error_geocoding_A' | 'error_geocoding_B' | 'error_both_geocoding' | 'error_calculation';
+  calculationType: 'haversine' | 'geocoded_haversine' | null;
+  status: 'success' | 'error_geocoding_A' | 'error_geocoding_B' | 'error_both_geocoding' | 'error_calculation' | 'pending';
+  message?: string;
   fromLocation?: string;
   toLocation?: string;
   calculatedAt?: string;
   originalInputA?: string;
   originalInputB?: string;
-  message?: string;
 }
 
 export interface RouteCalculation {
@@ -357,57 +355,81 @@ export interface RouteCalculation {
   isAiRouteAnalysisLoading?: boolean;
 }
 
-export interface BulkRouteResultItem extends RouteResult {
+export interface BulkRouteResultItem extends Partial<RouteResult> {
   id: string;
   originalInputA: string;
   originalInputB: string;
 }
 
-// --- NEW TYPES FOR MILESTONE PLANNER ---
-export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'delayed' | 'cancelled';
-export type MilestonePriority = 'low' | 'medium' | 'high' | 'critical';
-export type MilestoneOutputType = 'csv' | 'json' | 'text' | 'ai_report';
-
-export interface SubTask {
-  id: string;
-  title: string;
-  completed: boolean;
-  assignee?: string;
-  dueDate?: string;
+export interface CountryInfo {
+  code: string;
+  name: string;
 }
 
-export interface Milestone {
-  id: string;
-  date: string;
-  title: string;
-  description?: string;
-  value?: string;
-  category: string;
-  status?: MilestoneStatus;
-  priority?: MilestonePriority;
-  assignee?: string;
-  tags?: string[];
-  subTasks?: SubTask[];
-  source: 'manual' | 'uploaded';
-  durationFromPrevious?: string;
-  durationFromStart?: string;
-  completionPercentage?: number;
-  dependencies?: string[];
-  estimatedHours?: number;
-  actualHours?: number;
-  budget?: number;
-  actualCost?: number;
-  notes?: string;
-}
-
-export interface DataRow {
-  [key: string]: any;
-}
-
-// --- APP CONTEXT TYPE ---
+// --- TYPE FOR RoutePlannerPage.tsx ---
 export interface AppContextType {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-  reduceMotion: boolean;
-  setReduceMotion: (reduce: boolean) => void;
+    theme: Theme;
+    reduceMotion: boolean;
+}
+
+// --- NEW TYPES FOR DYNAMIC DASHBOARD ---
+export type WidgetType = 'kpi' | 'bar' | 'line' | 'pie' | 'table';
+
+export interface BaseWidgetConfig {
+    id: string;
+    title: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+export interface KPIWidgetConfig extends BaseWidgetConfig {
+    type: 'kpi';
+    valueField: string | null;
+    aggregator: AggregatorType;
+}
+
+export interface ChartWidgetConfig extends BaseWidgetConfig {
+    type: 'bar' | 'line' | 'pie';
+    xAxisField: string | null;
+    yAxisField: string | null;
+    aggregator: AggregatorType;
+}
+
+export interface TableWidgetConfig extends BaseWidgetConfig {
+    type: 'table';
+    columns: string[];
+    rowCount: number;
+}
+
+export type DashboardWidget = KPIWidgetConfig | ChartWidgetConfig | TableWidgetConfig;
+
+// --- NEW TYPES FOR GEOJSON MAP VIEW ---
+export interface GeoJsonProperties {
+  [name: string]: any;
+}
+
+export interface GeoJsonGeometry {
+  type: 'Point' | 'MultiPoint' | 'LineString' | 'MultiLineString' | 'Polygon' | 'MultiPolygon' | 'GeometryCollection';
+  coordinates: any[];
+  geometries?: GeoJsonGeometry[];
+}
+
+export interface GeoJsonFeature {
+  type: 'Feature';
+  geometry: GeoJsonGeometry | null;
+  properties: GeoJsonProperties | null;
+  id?: string | number;
+}
+
+export interface GeoJsonFeatureCollection {
+  type: 'FeatureCollection';
+  features: GeoJsonFeature[];
+}
+
+export interface MapFeatureStyle {
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
 }

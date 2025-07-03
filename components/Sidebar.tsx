@@ -1,3 +1,5 @@
+
+
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { SIDEBAR_SECTIONS } from '../constants';
 import { IconType, ViewKey, SidebarItemConfig } from '../types';
@@ -77,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView
 
   return (
     <aside 
-      className={`panel-holographic fixed top-16 left-0 h-[calc(100vh-4rem)] w-64 text-white p-4 transition-transform duration-300 ease-in-out z-40 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} overflow-y-auto hide-scrollbar`}
+      className={`sidebar panel-holographic fixed top-16 left-0 h-[calc(100vh-4rem)] w-64 text-white p-2 transition-transform duration-300 ease-in-out z-40 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} overflow-y-auto hide-scrollbar`}
     >
       {SIDEBAR_SECTIONS.map((section, sectionIndex) => {
         const isCollapsed = collapsedSections[section.title] || false;
@@ -104,7 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView
               <div className="space-y-1">
                 {section.items.map((item) => (
                   <SidebarItem 
-                    key={item.name} 
+                    key={item.viewId} 
                     item={item} 
                     onNavigate={onNavigate}
                     isActive={activeView === item.viewId}

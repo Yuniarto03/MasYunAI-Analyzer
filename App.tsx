@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useContext } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -22,11 +23,10 @@ import { WorkflowView } from './components/views/WorkflowView';
 import { AIAssistantView } from './components/views/AIAssistantView';
 import { DiagrammingMatrixView } from './components/views/DiagrammingMatrixView';
 import { RoutePlannerView } from './components/views/RoutePlannerView';
-import MilestonePlannerView from './components/views/MilestonePlannerView';
+import MapView from './components/views/MapView';
 import { DOCK_ITEMS, NAV_MENU_ITEMS, SIDEBAR_SECTIONS } from './constants';
 import { IconType, ViewKey, Theme } from './types'; 
 import { DataProvider } from './contexts/DataContext';
-import { AppProvider, AppContext } from './contexts/AppContext';
 
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewKey>('welcome');
@@ -35,8 +35,6 @@ const AppContent: React.FC = () => {
   const [showFeaturesModal, setShowFeaturesModal] = useState(false);
   const [genericFeatureName, setGenericFeatureName] = useState("Selected");
   const [isDockVisible, setIsDockVisible] = useState(true);
-
-  const { theme, reduceMotion } = useContext(AppContext);
 
   const handleViewChange = useCallback((viewKey: ViewKey) => {
     setActiveView(viewKey);
@@ -90,7 +88,7 @@ const AppContent: React.FC = () => {
   const mainViews: ViewKey[] = [
     'welcome', 'dashboard', 'dataUpload', 'dataTable', 'visualizations', 'settings',
     'onlineConnectors', 'projectDetails', 'advancedAITools', 'pivotTable', 'about',
-    'statisticalAnalysis', 'workflow', 'aiAssistant', 'diagrammingMatrix', 'routePlanner', 'milestonePlanner'
+    'statisticalAnalysis', 'workflow', 'aiAssistant', 'diagrammingMatrix', 'routePlanner', 'map'
   ];
   
   useEffect(() => {
@@ -109,12 +107,25 @@ const AppContent: React.FC = () => {
   }));
   
   const isGenericViewActive = !mainViews.includes(activeView);
+
+  const defaultTheme: Theme = {
+    accent1: 'blue-400',
+    accent2: 'purple-500',
+    accent3: 'green-400',
+    accent4: 'yellow-400',
+    darkBg: 'gray-900',
+    textColor: 'text-gray-200',
+    cardBg: 'bg-gray-800/80 backdrop-blur-sm',
+    borderColor: 'border-gray-700',
+    darkGray: 'darkGray',
+    mediumGray: 'mediumGray',
+  };
   
   const isDiagramOrWelcome = activeView === 'welcome' || activeView === 'diagrammingMatrix';
   
   return (
     <div className="relative h-screen flex flex-col overflow-hidden">
-      <FuturisticBackground theme={theme} reduceMotion={reduceMotion} />
+      <FuturisticBackground theme={defaultTheme} reduceMotion={false} />
       <Navbar 
         onToggleSidebar={toggleSidebar} 
         isSidebarOpen={isSidebarOpen}
@@ -128,13 +139,14 @@ const AppContent: React.FC = () => {
           activeView={activeView}
         />
         <main 
-          className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-0'} ${isDiagramOrWelcome ? '' : 'p-6'} ${activeView === 'diagrammingMatrix' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-0'} ${isDiagramOrWelcome ? '' : 'p-6'} ${activeView === 'diagrammingMatrix' || activeView === 'routePlanner' || activeView === 'map' ? 'overflow-hidden' : 'overflow-y-auto'}`}
         >
           <div style={{ display: activeView === 'welcome' ? 'block' : 'none', height: '100%' }}><WelcomeView onNavigate={handleViewChange} /></div>
           <div style={{ display: activeView === 'dashboard' ? 'block' : 'none' }}><DashboardView /></div>
           <div style={{ display: activeView === 'dataUpload' ? 'block' : 'none' }}><DataUploadView /></div>
           <div style={{ display: activeView === 'dataTable' ? 'block' : 'none' }}><DataTableView onNavigate={handleViewChange} /></div>
           <div style={{ display: activeView === 'visualizations' ? 'block' : 'none' }}><VisualizationView /></div>
+          <div style={{ display: activeView === 'map' ? 'block' : 'none', height: '100%' }}><MapView /></div>
           <div style={{ display: activeView === 'settings' ? 'block' : 'none' }}><SettingsView /></div>
           <div style={{ display: activeView === 'aiAssistant' ? 'block' : 'none' }}><AIAssistantView /></div>
           <div style={{ display: activeView === 'onlineConnectors' ? 'block' : 'none' }}><OnlineConnectorsView /></div>
@@ -145,8 +157,7 @@ const AppContent: React.FC = () => {
           <div style={{ display: activeView === 'statisticalAnalysis' ? 'block' : 'none' }}><StatisticalAnalysisView /></div>
           <div style={{ display: activeView === 'workflow' ? 'block' : 'none' }}><WorkflowView /></div>
           <div style={{ display: activeView === 'diagrammingMatrix' ? 'flex' : 'none', height: '100%' }}><DiagrammingMatrixView onNavigate={handleViewChange} /></div>
-          <div style={{ display: activeView === 'routePlanner' ? 'block' : 'none' }}><RoutePlannerView /></div>
-          <div style={{ display: activeView === 'milestonePlanner' ? 'block' : 'none' }}><MilestonePlannerView /></div>
+          <div style={{ display: activeView === 'routePlanner' ? 'block' : 'none', height: '100%' }}><RoutePlannerView theme={defaultTheme} reduceMotion={false} /></div>
           <div style={{ display: isGenericViewActive ? 'block' : 'none' }}><GenericPlaceholderView featureName={genericFeatureName} /></div>
         </main>
       </div>
@@ -179,11 +190,9 @@ const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <AppProvider>
-      <DataProvider>
-        <AppContent />
-      </DataProvider>
-    </AppProvider>
+    <DataProvider>
+      <AppContent />
+    </DataProvider>
   );
 }
 

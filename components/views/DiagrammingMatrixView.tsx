@@ -45,6 +45,7 @@ const AlignCenterIcon: IconType = ({ className }) => <svg className={className} 
 const AlignRightIcon: IconType = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 3v18" /><rect x="9" y="6" width="6" height="4" strokeWidth="1.5" /><rect x="5.5" y="14" width="10" height="4" strokeWidth="1.5" /></svg>;
 const DistributeHorizontalIcon: IconType = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5M3.75 6.75h16.5M3.75 17.25h16.5" /></svg>;
 const DistributeVerticalIcon: IconType = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75v16.5M6.75 3.75v16.5M17.25 3.75v16.5" /></svg>;
+const ImageIcon: IconType = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25z" /></svg>;
 
 const FONT_FAMILIES = ['Segoe UI', 'Arial', 'Courier New', 'Georgia', 'Times New Roman', 'Verdana'];
 
@@ -115,27 +116,75 @@ const getClosestPort = (fromPoint: {x: number, y: number}, toNode: DiagramNode) 
     return closestPort;
 };
 
-const getEdgePath = (sourceNode: DiagramNode, targetNode: DiagramNode) => {
+const generateEdgePath = (sourceNode: DiagramNode, targetNode: DiagramNode, edge: DiagramEdge) => {
+    const type = edge.style?.type || 'curved';
+    
     const sourceCenter = { x: sourceNode.position.x + sourceNode.size.width / 2, y: sourceNode.position.y + sourceNode.size.height / 2 };
     const targetCenter = { x: targetNode.position.x + targetNode.size.width / 2, y: targetNode.position.y + targetNode.size.height / 2 };
     const sourcePort = getClosestPort(targetCenter, sourceNode);
     const targetPort = getClosestPort(sourceCenter, targetNode);
-    const dx = targetPort.x - sourcePort.x;
-    const dy = targetPort.y - sourcePort.y;
-    const c1 = { x: sourcePort.x, y: sourcePort.y };
-    const c2 = { x: targetPort.x, y: targetPort.y };
 
-    if (sourcePort.index === 0) c1.y -= dy * 0.4;
-    else if (sourcePort.index === 2) c1.y += dy * 0.4;
-    else if (sourcePort.index === 1) c1.x += dx * 0.4;
-    else if (sourcePort.index === 3) c1.x -= dx * 0.4;
+    switch(type) {
+        case 'straight':
+            return { path: `M ${sourcePort.x} ${sourcePort.y} L ${targetPort.x} ${targetPort.y}`, labelPosition: { x: (sourcePort.x + targetPort.x) / 2, y: (sourcePort.y + targetPort.y) / 2 } };
 
-    if (targetPort.index === 0) c2.y += dy * 0.4;
-    else if (targetPort.index === 2) c2.y -= dy * 0.4;
-    else if (targetPort.index === 1) c2.x -= dx * 0.4;
-    else if (targetPort.index === 3) c2.x += dx * 0.4;
+        case 'orthogonal': {
+            const midpoint = edge.style?.midpoint;
+            let path = '';
+            let labelPos = { x: 0, y: 0 };
+            const p1 = { x: sourcePort.x, y: sourcePort.y };
+            const p4 = { x: targetPort.x, y: targetPort.y };
+            let p2 = { x: 0, y: 0 };
+            let p3 = { x: 0, y: 0 };
 
-    return `M ${sourcePort.x} ${sourcePort.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${targetPort.x} ${targetPort.y}`;
+            const orientation = sourcePort.index % 2 === 0 ? 'V' : 'H'; // 0,2 are top/bottom (Vertical exit), 1,3 are left/right (Horizontal exit)
+            
+            if (midpoint) {
+                 if (orientation === 'H') {
+                    p2 = { x: midpoint.x, y: p1.y };
+                    p3 = { x: midpoint.x, y: p4.y };
+                    labelPos = { x: midpoint.x, y: (p1.y + p4.y)/2 };
+                } else { // 'V'
+                    p2 = { x: p1.x, y: midpoint.y };
+                    p3 = { x: p4.x, y: midpoint.y };
+                    labelPos = { x: (p1.x + p4.x)/2, y: midpoint.y };
+                }
+                 path = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} L ${p4.x} ${p4.y}`;
+            } else {
+                if (orientation === 'H') {
+                    p2 = { x: (p1.x + p4.x) / 2, y: p1.y };
+                    p3 = { x: (p1.x + p4.x) / 2, y: p4.y };
+                    labelPos = { x: p2.x, y: (p1.y + p4.y)/2 };
+                } else { // 'V'
+                    p2 = { x: p1.x, y: (p1.y + p4.y) / 2 };
+                    p3 = { x: p4.x, y: (p1.y + p4.y) / 2 };
+                    labelPos = { x: (p1.x + p4.x)/2, y: p2.y };
+                }
+                path = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} L ${p4.x} ${p4.y}`;
+            }
+            return { path, labelPosition: labelPos };
+        }
+        case 'curved':
+        default: {
+            const dx = targetPort.x - sourcePort.x;
+            const dy = targetPort.y - sourcePort.y;
+            const c1 = { x: sourcePort.x, y: sourcePort.y };
+            const c2 = { x: targetPort.x, y: targetPort.y };
+            const curviness = 0.4;
+            
+            if (sourcePort.index % 2 === 0) c1.y += dy * curviness * (sourcePort.index === 0 ? -1 : 1);
+            else c1.x += dx * curviness * (sourcePort.index === 3 ? -1 : 1);
+            
+            if (targetPort.index % 2 === 0) c2.y -= dy * curviness * (targetPort.index === 0 ? -1 : 1);
+            else c2.x -= dx * curviness * (targetPort.index === 3 ? -1 : 1);
+            
+            const t = 0.5;
+            const bx = (1 - t) ** 3 * sourcePort.x + 3 * (1 - t) ** 2 * t * c1.x + 3 * (1 - t) * t ** 2 * c2.x + t ** 3 * targetPort.x;
+            const by = (1 - t) ** 3 * sourcePort.y + 3 * (1 - t) ** 2 * t * c1.y + 3 * (1 - t) * t ** 2 * c2.y + t ** 3 * targetPort.y;
+            
+            return { path: `M ${sourcePort.x} ${sourcePort.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${targetPort.x} ${targetPort.y}`, labelPosition: { x: bx, y: by } };
+        }
+    }
 };
 
 const ICONS: Record<string, IconType> = {
@@ -153,6 +202,7 @@ const ASSET_PALETTE_ITEMS = [
     { name: 'Rectangle', type: 'rectangle' as const, icon: RectangleIcon, nodeIcon: null, label: 'Generic Box' },
     { name: 'Ellipse', type: 'ellipse' as const, icon: EllipseIcon, nodeIcon: null, label: 'Start / End' },
     { name: 'Decision', type: 'diamond' as const, icon: DiamondIcon, nodeIcon: null, label: 'Decision' },
+    { name: 'Image', type: 'image' as const, icon: ImageIcon, nodeIcon: null, label: 'Image Frame' },
     { name: 'Process', type: 'rectangle' as const, icon: HexagonIcon, nodeIcon: 'process', label: 'Process' },
     { name: 'Text', type: 'text' as const, icon: TextIcon, nodeIcon: null, label: 'Annotation Text' },
     { name: 'Person', type: 'rectangle' as const, icon: UserIcon, nodeIcon: 'user', label: 'Name\nTitle' },
@@ -292,6 +342,19 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
                 });
                 break;
             }
+            case 'reshape-edge': {
+                const { edgeId } = interactionState.data;
+                setState(prev => ({ ...prev, edges: prev.edges.map(e => {
+                    if (e.id !== edgeId) return e;
+                    const baseStyle = e.style ?? { stroke: THEMES[theme].edge.stroke, strokeWidth: 2 };
+                    const newStyle: DiagramEdge['style'] = {
+                        ...baseStyle,
+                        midpoint: { x: currentPosOnCanvas.x, y: currentPosOnCanvas.y }
+                    };
+                    return { ...e, style: newStyle };
+                }) }), true);
+                break;
+            }
             case 'resize': {
                 const { id, handle, startPos, startSize } = interactionState.data;
                 const dx = currentPosOnCanvas.x - startPos.x;
@@ -309,7 +372,7 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
                 break;
             }
         }
-    }, [interactionState, getPointInSvg, pan.x, pan.y, zoom, setState, nodes, edges]);
+    }, [interactionState, getPointInSvg, pan.x, pan.y, zoom, setState, nodes, edges, theme]);
     
     const handleWindowMouseUp = useCallback((e: MouseEvent) => {
         if (interactionState?.type === 'connect') {
@@ -319,11 +382,11 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
             if (targetId && sourceId !== targetId) {
                 const newEdge: DiagramEdge = {
                     id: `edge-${Date.now()}`, source: sourceId, target: targetId, label: '',
-                    style: { stroke: THEMES[theme].edge.stroke, strokeWidth: 2, arrowHead: 'arrow' },
+                    style: { type: 'orthogonal', stroke: THEMES[theme].edge.stroke, strokeWidth: 2, arrowHead: 'arrow' },
                 };
                 setState(prev => ({...prev, edges: [...prev.edges, newEdge]}));
             }
-        } else if (interactionState?.type === 'drag' || interactionState?.type === 'resize') {
+        } else if (interactionState?.type === 'drag' || interactionState?.type === 'resize' || interactionState?.type === 'reshape-edge') {
             const finalState = {nodes, edges};
             setState(finalState);
         } else if (interactionState?.type === 'marquee' && marquee) {
@@ -441,7 +504,7 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
                 id: `node-${Date.now()}`, type,
                 position: { x: x - 75, y: y - 37.5 },
                 size: { width: 150, height: type === 'text' ? 50 : 75 },
-                data: { label, style: { ...THEMES[theme].node, icon: icon, ...(type === 'text' && { backgroundColor: 'transparent', borderColor: 'transparent' }) } }
+                data: { label, style: { ...THEMES[theme].node, icon: icon, ...(type === 'text' && { backgroundColor: 'transparent', borderColor: 'transparent' }), ...(type === 'image' && { backgroundImage: '' }) } }
             };
             setState(prev => ({...prev, nodes: [...prev.nodes, newNode]}));
         }
@@ -480,6 +543,12 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
         setInteractionState({ type: 'resize', data: { id, handle, startPos, startSize: node.size } });
     };
 
+    const handleEdgeMidpointMouseDown = (e: ReactMouseEvent, edgeId: string) => {
+        e.stopPropagation();
+        const startMouseOnCanvas = { x: (getPointInSvg(e.clientX, e.clientY).x - pan.x) / zoom, y: (getPointInSvg(e.clientX, e.clientY).y - pan.y) / zoom };
+        setInteractionState({ type: 'reshape-edge', data: { edgeId, startMouseOnCanvas } });
+    };
+
     const handleNodeConnectStart = (e: ReactMouseEvent, sourceId: string) => {
         e.stopPropagation();
         const { x, y } = getPointInSvg(e.clientX, e.clientY);
@@ -488,14 +557,44 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
     
     const updateNodeStyle = (id: string, styleUpdate: Partial<DiagramNodeStyle>) => setState(prev => ({ ...prev, nodes: prev.nodes.map(n => n.id === id ? { ...n, data: { ...n.data, style: { ...n.data.style, ...styleUpdate } } } : n) }));
     const updateNodeData = (id: string, dataUpdate: Partial<DiagramNode['data']>) => setState(prev => ({ ...prev, nodes: prev.nodes.map(n => n.id === id ? { ...n, data: { ...n.data, ...dataUpdate } } : n) }));
-    const updateEdgeStyle = (id: string, styleUpdate: Partial<DiagramEdge['style']>) => setState(prev => ({ ...prev, edges: prev.edges.map(e => e.id === id ? { ...e, style: { ...e.style, ...styleUpdate } } : e) }));
+    
+    const updateEdgeStyle = (id: string, styleUpdate: Partial<DiagramEdge['style']>) => setState(prev => ({ ...prev, edges: prev.edges.map(e => {
+        if (e.id !== id) return e;
+        const baseStyle = e.style ?? { stroke: THEMES[theme].edge.stroke, strokeWidth: 2 };
+        const newStyle = { ...baseStyle, ...styleUpdate };
+        return { ...e, style: newStyle };
+    })}));
+
     const updateEdgeData = (id: string, dataUpdate: {label?: string}) => setState(prev => ({ ...prev, edges: prev.edges.map(e => e.id === id ? { ...e, label: dataUpdate.label } : e) }));
 
     const applyTheme = (themeName: keyof typeof THEMES) => {
-        setTheme(themeName); const selectedTheme = THEMES[themeName];
+        setTheme(themeName);
+        const selectedTheme = THEMES[themeName];
         setState(prev => ({
-            nodes: prev.nodes.map(n => ({ ...n, data: { ...n.data, style: { ...selectedTheme.node, ...n.data.style, fontFamily: selectedTheme.node.fontFamily, color: selectedTheme.node.color, backgroundColor: n.type === 'text' ? 'transparent' : selectedTheme.node.backgroundColor, borderColor: n.type === 'text' ? 'transparent' : selectedTheme.node.borderColor } } })),
-            edges: prev.edges.map(e => ({ ...e, style: { ...e.style, stroke: selectedTheme.edge.stroke } }))
+            nodes: prev.nodes.map(n => ({
+                ...n,
+                data: {
+                    ...n.data,
+                    style: {
+                        ...selectedTheme.node,
+                        ...n.data.style,
+                        fontFamily: selectedTheme.node.fontFamily,
+                        color: selectedTheme.node.color,
+                        backgroundColor: n.type === 'text' ? 'transparent' : (n.data.style.backgroundColor || selectedTheme.node.backgroundColor),
+                        borderColor: n.type === 'text' ? 'transparent' : (n.data.style.borderColor || selectedTheme.node.borderColor),
+                    }
+                }
+            })),
+            edges: prev.edges.map(e => {
+                const baseStyle = e.style ?? { stroke: selectedTheme.edge.stroke, strokeWidth: 2 };
+                return {
+                    ...e,
+                    style: {
+                        ...baseStyle,
+                        stroke: selectedTheme.edge.stroke,
+                    }
+                };
+            })
         }));
     };
     
@@ -520,7 +619,7 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
         try {
             const { nodes: aiNodes, edges: aiEdges } = await generateDiagramFromPrompt(prompt);
             const themedNodes = aiNodes.map(node => ({ ...node, data: { ...node.data, style: { ...THEMES[theme].node, ...(node.data.style || {}) } } }));
-            const themedEdges = aiEdges.map(edge => ({ ...edge, style: { ...edge.style, stroke: THEMES[theme].edge.stroke, strokeWidth: 2, arrowHead: 'arrow' as const } }));
+            const themedEdges = aiEdges.map(edge => ({ ...edge, style: { ...(edge.style ?? {}), stroke: THEMES[theme].edge.stroke, strokeWidth: 2, arrowHead: 'arrow' as const } }));
             setState({ nodes: themedNodes, edges: themedEdges });
             setAIPrompt('');
             setShowInitialPicker(false);
@@ -658,12 +757,13 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
             width: size.width, height: size.height,
             stroke: style.borderColor, strokeWidth: style.borderWidth,
         };
+        const clipPathId = `clip-${id}`;
 
         const renderShape = (isShadow: boolean) => {
             const fillColor = isShadow ? lightenDarkenColor(style.backgroundColor ?? '#000000', -40) : style.backgroundColor;
             const shapeProps = { ...baseProps, fill: fillColor, stroke: isShadow ? lightenDarkenColor(style.borderColor ?? '#000000', -40) : style.borderColor };
             
-            if (type === 'rectangle' || type === 'text') return <rect {...shapeProps} rx="4" />;
+            if (type === 'rectangle' || type === 'text' || type === 'image') return <rect {...shapeProps} rx="4" />;
             if (type === 'ellipse') return <ellipse cx={size.width/2} cy={size.height/2} rx={size.width/2} ry={size.height/2} {...shapeProps} />;
             if (type === 'diamond') return <polygon points={`${size.width/2},0 ${size.width},${size.height/2} ${size.width/2},${size.height} 0,${size.height/2}`} {...shapeProps} />;
             return null;
@@ -671,15 +771,29 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
 
         return (
             <g key={id} data-node-id={id} transform={`translate(${node.position.x}, ${node.position.y})`} className={`diagram-node ${isSelected ? 'selected' : ''}`} onMouseDown={e => handleNodeMouseDown(e, id)} style={{opacity: style.opacity ?? 1, cursor: activeTool === 'connect' ? 'crosshair' : 'move' }}>
+                 <defs><clipPath id={clipPathId}><rect x="0" y="0" width={size.width} height={size.height} rx="4" /></clipPath></defs>
                 {perspective === 'iso' && <g transform={`translate(${isoXOffset}, ${isoYOffset})`}>{renderShape(true)}</g>}
                 {renderShape(false)}
-                {style.backgroundImage && <image href={style.backgroundImage} x="0" y="0" width={size.width} height={size.height} preserveAspectRatio="xMidYMid slice" />}
-                <foreignObject x="5" y="5" width={size.width - 10} height={size.height - 10}>
-                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize, wordBreak: 'break-word', lineHeight: 1.2, padding: '2px',}}>
-                       {NodeIcon && <NodeIcon className="w-6 h-6 mb-1" />}
-                       <span style={{ whiteSpace: 'pre-wrap' }}>{data.label}</span>
-                    </div>
-                </foreignObject>
+
+                {type === 'image' && style.backgroundImage ? (
+                    <image href={style.backgroundImage} x="0" y="0" width={size.width} height={size.height} clipPath={`url(#${clipPathId})`} preserveAspectRatio={style.imageFit === 'contain' ? 'xMidYMid meet' : style.imageFit === 'fill' ? 'xMidYMid slice' : 'none'} style={{ filter: style.filter }} />
+                ) : type === 'image' ? (
+                     <foreignObject x="0" y="0" width={size.width} height={size.height} className="pointer-events-none">
+                        <div style={{width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                           <ImageIcon className="w-12 h-12 text-gray-500" />
+                           <span className="text-xs mt-2 text-gray-500">Upload Image</span>
+                        </div>
+                    </foreignObject>
+                ) : null}
+
+                {(type !== 'image' || (type === 'image' && data.label)) && 
+                    <foreignObject x="5" y="5" width={size.width - 10} height={size.height - 10}>
+                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize, wordBreak: 'break-word', lineHeight: 1.2, padding: '2px',}}>
+                           {NodeIcon && <NodeIcon className="w-6 h-6 mb-1" />}
+                           <span style={{ whiteSpace: 'pre-wrap' }}>{data.label}</span>
+                        </div>
+                    </foreignObject>
+                }
                 {!isPresentationMode && activeTool === 'select' && ports.map((port, index) => <circle key={index} className="connection-port" cx={port.x} cy={port.y} r="6" onMouseDown={e => handleNodeConnectStart(e, id)} />)}
                 {isSelected && !isPresentationMode && activeTool === 'select' && <>
                     <rect className="resize-handle" x={-4} y={-4} width="8" height="8" style={{cursor: 'nwse-resize'}} onMouseDown={e => handleResizeHandleMouseDown(e, id, 'nw')} />
@@ -693,7 +807,7 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
 
     const generateTemplate = (type: 'flowchart' | 'orgchart' | 'workflow') => {
         const defaultStyle = THEMES[theme].node;
-        const edgeStyle = { stroke: THEMES[theme].edge.stroke, strokeWidth: 2, arrowHead: 'arrow' as const };
+        const edgeStyle: DiagramEdge['style'] = { stroke: THEMES[theme].edge.stroke, strokeWidth: 2, arrowHead: 'arrow' as const };
         let template: { nodes: DiagramNode[], edges: DiagramEdge[] };
 
         if (type === 'flowchart') {
@@ -723,8 +837,10 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
                     { id: 'sales1', type: 'rectangle', position: { x: 550, y: 350 }, size: { width: 150, height: 75 }, data: { label: 'Sales Lead\nTeam Lead', style: orgNodeStyle } },
                 ],
                 edges: [
-                    { id: 'e1', source: 'ceo', target: 'vp1', style: orgEdgeStyle }, { id: 'e2', source: 'ceo', target: 'vp2', style: orgEdgeStyle },
-                    { id: 'e3', source: 'vp1', target: 'mgr1', style: orgEdgeStyle }, { id: 'e4', source: 'vp2', target: 'sales1', style: orgEdgeStyle },
+                    { id: 'e1', source: 'ceo', target: 'vp1', style: orgEdgeStyle as DiagramEdge['style'] }, 
+                    { id: 'e2', source: 'ceo', target: 'vp2', style: orgEdgeStyle as DiagramEdge['style'] },
+                    { id: 'e3', source: 'vp1', target: 'mgr1', style: orgEdgeStyle as DiagramEdge['style'] }, 
+                    { id: 'e4', source: 'vp2', target: 'sales1', style: orgEdgeStyle as DiagramEdge['style'] },
                 ]
             };
         } else { // workflow
@@ -739,11 +855,11 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
                     { id: 'db', type: 'rectangle', position: { x: 725, y: 250 }, size: { width: 150, height: 75 }, data: { label: 'Database', style: { ...workflowNodeStyle, icon: 'database' } } },
                 ],
                 edges: [
-                    { id: 'e1', source: 'req', target: 'lb', style: workflowEdgeStyle },
-                    { id: 'e2', source: 'lb', target: 'web1', style: workflowEdgeStyle },
-                    { id: 'e3', source: 'lb', target: 'web2', style: workflowEdgeStyle },
-                    { id: 'e4', source: 'web1', target: 'db', style: { ...workflowEdgeStyle, strokeDasharray: '8 4' } },
-                    { id: 'e5', source: 'web2', target: 'db', style: { ...workflowEdgeStyle, strokeDasharray: '8 4' } },
+                    { id: 'e1', source: 'req', target: 'lb', style: workflowEdgeStyle as DiagramEdge['style'] },
+                    { id: 'e2', source: 'lb', target: 'web1', style: workflowEdgeStyle as DiagramEdge['style'] },
+                    { id: 'e3', source: 'lb', target: 'web2', style: workflowEdgeStyle as DiagramEdge['style'] },
+                    { id: 'e4', source: 'web1', target: 'db', style: { ...workflowEdgeStyle, strokeDasharray: '8 4' } as DiagramEdge['style'] },
+                    { id: 'e5', source: 'web2', target: 'db', style: { ...workflowEdgeStyle, strokeDasharray: '8 4' } as DiagramEdge['style'] },
                 ]
             };
         }
@@ -874,11 +990,9 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
                     <svg ref={svgRef} className={`diagram-canvas w-full h-full ${activeTool === 'pan' && interactionState?.type === 'pan' ? 'grabbing' : ''} ${activeTool === 'select' ? 'select-mode' : ''}`} style={{'--grid-color': THEMES[theme].canvas.gridColor} as React.CSSProperties} onMouseDown={handleCanvasMouseDown}>
                         <defs>
                             <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                            <linearGradient id="edge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="#a855f7"><animate attributeName="stop-color" values="#a855f7;#22d3ee;#a855f7" dur="4s" repeatCount="indefinite" /></stop>
-                                <stop offset="100%" stopColor="#22d3ee"><animate attributeName="stop-color" values="#22d3ee;#a855f7;#22d3ee" dur="4s" repeatCount="indefinite" /></stop>
-                            </linearGradient>
                             <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" /></marker>
+                            <marker id="openArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse" fill="none" stroke="currentColor"><path d="M 1 1 L 9 5 L 1 9" /></marker>
+                            <marker id="diamond" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 5 L 5 0 L 10 5 L 5 10 Z" fill="currentColor" /></marker>
                             <marker id="circle" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6"><circle cx="5" cy="5" r="3" fill="currentColor" /></marker>
                         </defs>
                         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
@@ -887,13 +1001,23 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
                                 const sourceNode = nodes.find(n => n.id === edge.source);
                                 const targetNode = nodes.find(n => n.id === edge.target);
                                 if (!sourceNode || !targetNode) return null;
-                                const path = getEdgePath(sourceNode, targetNode);
-                                const midX = (sourceNode.position.x + sourceNode.size.width/2 + targetNode.position.x + targetNode.size.width/2) / 2;
-                                const midY = (sourceNode.position.y + sourceNode.size.height/2 + targetNode.position.y + targetNode.size.height/2) / 2;
+                                
+                                const { path, labelPosition } = generateEdgePath(sourceNode, targetNode, edge);
+                                const isSelected = selectedElements.has(edge.id);
+                                const currentEdgeStyle = edge.style;
+
+                                const markerId = currentEdgeStyle?.arrowHead && currentEdgeStyle.arrowHead !== 'none' ? `url(#${currentEdgeStyle.arrowHead})` : undefined;
+
                                 return (
-                                    <g key={edge.id} className={`diagram-edge ${selectedElements.has(edge.id) ? 'selected' : ''}`} onClick={() => setSelectedElements(new Set([edge.id]))}>
-                                        <path d={path} fill="none" stroke="url(#edge-gradient)" strokeWidth={edge.style?.strokeWidth || 2} strokeDasharray={edge.style?.strokeDasharray} markerEnd={edge.style?.arrowHead === 'arrow' ? 'url(#arrow)' : undefined} markerStart={edge.style?.arrowHead === 'circle' ? 'url(#circle)' : undefined} style={{color: edge.style?.stroke}} className="animated-edge" />
-                                        {edge.label && <text x={midX} y={midY-5} textAnchor="middle" fill={THEMES[theme].edge.labelColor} fontSize="12">{edge.label}</text>}
+                                    <g key={edge.id} className={`diagram-edge ${isSelected ? 'selected' : ''}`} onClick={() => setSelectedElements(new Set([edge.id]))}>
+                                        <path d={path} fill="none" stroke={currentEdgeStyle?.stroke ?? THEMES[theme].edge.stroke} strokeOpacity="0.3" strokeWidth={(currentEdgeStyle?.strokeWidth ?? 2) + 8} />
+                                        <path d={path} className="edge-path-main" fill="none" stroke={currentEdgeStyle?.stroke ?? THEMES[theme].edge.stroke} strokeWidth={currentEdgeStyle?.strokeWidth ?? 2} strokeDasharray={currentEdgeStyle?.strokeDasharray} markerEnd={markerId} style={{color: currentEdgeStyle?.stroke ?? THEMES[theme].edge.stroke}} />
+                                        {isSelected && <path d={path} fill="none" stroke="#22d3ee" strokeWidth="2" className="animated-edge-flow" />}
+
+                                        {isSelected && edge.style?.type === 'orthogonal' && (
+                                            <circle cx={labelPosition.x} cy={labelPosition.y} r="6" className="edge-reshape-handle" onMouseDown={e => handleEdgeMidpointMouseDown(e, edge.id)} />
+                                        )}
+                                        {edge.label && <text x={labelPosition.x} y={labelPosition.y} textAnchor="middle" dominantBaseline="middle" className="diagram-edge-label" style={{ stroke: THEMES[theme].canvas.backgroundColor }} fill={THEMES[theme].edge.labelColor} fontSize="12">{edge.label}</text>}
                                     </g>
                                 );
                             })}
@@ -935,22 +1059,38 @@ export const DiagrammingMatrixView: React.FC<DiagrammingMatrixViewProps> = ({ on
                 <Panel title={selectedElements.size > 1 ? `${selectedElements.size} Items Selected` : (selectedNode ? 'Node Inspector' : 'Edge Inspector')} className="w-80 flex-shrink-0 ml-4 overflow-y-auto hide-scrollbar" onMouseDown={e => e.stopPropagation()}>
                     <div className="space-y-3">
                         {selectedNode && selectedElements.size === 1 && <>
+                             {selectedNode.type === 'image' && (
+                                <div className='space-y-3 p-2 bg-gray-900/50 rounded-lg'>
+                                    <h3 className="text-sm font-semibold text-cyan-300 border-b border-cyan-500/20 pb-1 mb-2">Image Properties</h3>
+                                    <button onClick={() => imageInputRef.current?.click()} className="w-full p-2 bg-cyan-600 hover:bg-cyan-500 rounded text-sm text-white text-center">Upload / Replace Image</button>
+                                    <input type="file" ref={imageInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                                    <div>
+                                        <label className="text-xs text-gray-400">Image Fit</label>
+                                        <select value={selectedNode.data.style.imageFit ?? 'cover'} onChange={e => updateNodeStyle(selectedNode.id, { imageFit: e.target.value as any })} className="w-full p-1 bg-gray-700 rounded text-sm">
+                                            <option value="cover">Cover</option>
+                                            <option value="contain">Contain</option>
+                                            <option value="fill">Fill (Stretch)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                             )}
+
                             <div><label className="text-xs text-gray-400">Label</label><textarea value={selectedNode.data.label} onChange={e => updateNodeData(selectedNode.id, { label: e.target.value })} className="w-full p-1 bg-gray-700 rounded text-sm resize-none" rows={3}/></div>
-                            <div><label className="text-xs text-gray-400">Shape</label><select value={selectedNode.type} onChange={e => setState(prev => ({...prev, nodes: prev.nodes.map(n => n.id === selectedNode.id ? { ...n, type: e.target.value as DiagramNode['type'] } : n)}))} className="w-full p-1 bg-gray-700 rounded text-sm"><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="diamond">Diamond</option><option value="text">Text</option></select></div>
+                            <div><label className="text-xs text-gray-400">Shape</label><select value={selectedNode.type} onChange={e => setState(prev => ({...prev, nodes: prev.nodes.map(n => n.id === selectedNode.id ? { ...n, type: e.target.value as DiagramNode['type'] } : n)}))} className="w-full p-1 bg-gray-700 rounded text-sm"><option value="rectangle">Rectangle</option><option value="ellipse">Ellipse</option><option value="diamond">Diamond</option><option value="text">Text</option><option value="image">Image</option></select></div>
                             <div><label className="text-xs text-gray-400">Font</label><select value={selectedNode.data.style.fontFamily} onChange={e => updateNodeStyle(selectedNode.id, { fontFamily: e.target.value })} className="w-full p-1 bg-gray-700 rounded text-sm"><option value="">Default</option>{FONT_FAMILIES.map(f => <option key={f} value={f}>{f}</option>)}</select></div>
                             <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-gray-400">Font Size</label><input type="number" value={selectedNode.data.style.fontSize} onChange={e => updateNodeStyle(selectedNode.id, { fontSize: parseInt(e.target.value) })} className="w-full p-1 bg-gray-700 rounded text-sm" /></div><div><label className="text-xs text-gray-400">Text Color</label><input type="color" value={selectedNode.data.style.color} onChange={e => updateNodeStyle(selectedNode.id, { color: e.target.value })} className="w-full p-0 h-8 bg-gray-700 rounded cursor-pointer" /></div></div>
                             <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-gray-400">Background</label><input type="color" value={selectedNode.data.style.backgroundColor} onChange={e => updateNodeStyle(selectedNode.id, { backgroundColor: e.target.value })} className="w-full p-0 h-8 bg-gray-700 rounded cursor-pointer" /></div><div><label className="text-xs text-gray-400">Border</label><input type="color" value={selectedNode.data.style.borderColor} onChange={e => updateNodeStyle(selectedNode.id, { borderColor: e.target.value })} className="w-full p-0 h-8 bg-gray-700 rounded cursor-pointer" /></div></div>
                             <div><label className="text-xs text-gray-400">Border Width</label><input type="range" value={selectedNode.data.style.borderWidth} onChange={e => updateNodeStyle(selectedNode.id, { borderWidth: parseInt(e.target.value) })} min="0" max="10" className="w-full" /></div>
                             <div><label className="text-xs text-gray-400">Opacity</label><input type="range" value={selectedNode.data.style.opacity} onChange={e => updateNodeStyle(selectedNode.id, { opacity: parseFloat(e.target.value) })} min="0" max="1" step="0.1" className="w-full" /></div>
                             <div><label className="text-xs text-gray-400">Icon</label><input type="text" value={selectedNode.data.style.icon} onChange={e => updateNodeStyle(selectedNode.id, { icon: e.target.value })} placeholder="e.g. database, cloud" className="w-full p-1 bg-gray-700 rounded text-sm" /></div>
-                            <div><label className="text-xs text-gray-400">Background Image</label><input type="file" ref={imageInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" /><div className="flex gap-2 mt-1"><button onClick={() => imageInputRef.current?.click()} className="flex-1 p-1 bg-gray-600 hover:bg-gray-500 rounded text-sm text-center">Upload</button>{selectedNode.data.style.backgroundImage && (<button onClick={() => updateNodeStyle(selectedNode.id, { backgroundImage: '' })} className="flex-shrink-0 p-1 bg-red-600 hover:bg-red-500 rounded text-sm">Remove</button>)}</div></div>
                             <label className="flex items-center space-x-2 cursor-pointer text-sm text-gray-300"><input type="checkbox" checked={!!selectedNode.data.style.shadow} onChange={e => updateNodeStyle(selectedNode.id, { shadow: e.target.checked })} className="h-4 w-4 text-purple-500 bg-gray-600 rounded border-gray-500 focus:ring-purple-400"/><span>Enable Shadow</span></label>
                         </>}
                          {selectedEdge && selectedElements.size === 1 && <>
-                            <div><label className="text-xs text-gray-400">Label</label><input type="text" value={selectedEdge.label} onChange={e => updateEdgeData(selectedEdge.id, { label: e.target.value })} className="w-full p-1 bg-gray-700 rounded text-sm" /></div>
-                            <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-gray-400">Line Width</label><input type="number" value={selectedEdge.style?.strokeWidth || 2} onChange={e => updateEdgeStyle(selectedEdge.id, { strokeWidth: parseInt(e.target.value) })} min="1" max="10" className="w-full p-1 bg-gray-700 rounded text-sm" /></div><div><label className="text-xs text-gray-400">Line Color</label><input type="color" value={selectedEdge.style?.stroke} onChange={e => updateEdgeStyle(selectedEdge.id, { stroke: e.target.value })} className="w-full p-0 h-8 bg-gray-700 rounded cursor-pointer" /></div></div>
-                            <div><label className="text-xs text-gray-400">Line Style</label><select value={selectedEdge.style?.strokeDasharray || ''} onChange={e => updateEdgeStyle(selectedEdge.id, { strokeDasharray: e.target.value })} className="w-full p-1 bg-gray-700 rounded text-sm"><option value="">Solid</option><option value="8 4">Dashed</option><option value="2 4">Dotted</option></select></div>
-                            <div><label className="text-xs text-gray-400">Arrow Head</label><select value={selectedEdge.style?.arrowHead || 'none'} onChange={e => updateEdgeStyle(selectedEdge.id, { arrowHead: e.target.value as any })} className="w-full p-1 bg-gray-700 rounded text-sm"><option value="none">None</option><option value="arrow">Arrow</option><option value="circle">Circle</option></select></div>
+                            <div><label className="text-xs text-gray-400">Label</label><input type="text" value={selectedEdge.label ?? ''} onChange={e => updateEdgeData(selectedEdge.id, { label: e.target.value })} className="w-full p-1 bg-gray-700 rounded text-sm" /></div>
+                            <div><label className="text-xs text-gray-400">Connector Type</label><select value={selectedEdge.style?.type ?? 'curved'} onChange={e => updateEdgeStyle(selectedEdge.id, { type: e.target.value as any })} className="w-full p-1 bg-gray-700 rounded text-sm"><option value="curved">Curved</option><option value="orthogonal">Orthogonal</option><option value="straight">Straight</option></select></div>
+                            <div className="grid grid-cols-2 gap-2"><div><label className="text-xs text-gray-400">Line Width</label><input type="number" value={selectedEdge.style?.strokeWidth ?? 2} onChange={e => updateEdgeStyle(selectedEdge.id, { strokeWidth: parseInt(e.target.value) })} min="1" max="10" className="w-full p-1 bg-gray-700 rounded text-sm" /></div><div><label className="text-xs text-gray-400">Line Color</label><input type="color" value={selectedEdge.style?.stroke ?? THEMES[theme].edge.stroke} onChange={e => updateEdgeStyle(selectedEdge.id, { stroke: e.target.value })} className="w-full p-0 h-8 bg-gray-700 rounded cursor-pointer" /></div></div>
+                            <div><label className="text-xs text-gray-400">Line Style</label><select value={selectedEdge.style?.strokeDasharray ?? ''} onChange={e => updateEdgeStyle(selectedEdge.id, { strokeDasharray: e.target.value })} className="w-full p-1 bg-gray-700 rounded text-sm"><option value="">Solid</option><option value="8 4">Dashed</option><option value="2 4">Dotted</option></select></div>
+                            <div><label className="text-xs text-gray-400">Arrow Head</label><select value={selectedEdge.style?.arrowHead ?? 'none'} onChange={e => updateEdgeStyle(selectedEdge.id, { arrowHead: e.target.value as any })} className="w-full p-1 bg-gray-700 rounded text-sm"><option value="none">None</option><option value="arrow">Arrow</option><option value="openArrow">Open Arrow</option><option value="circle">Circle</option><option value="diamond">Diamond</option></select></div>
                          </>}
                          <button onClick={handleDeleteElement} className="w-full mt-4 p-2 text-sm bg-red-600/80 hover:bg-red-600 text-white rounded-md flex items-center justify-center gap-2"><TrashIcon className="w-4 h-4"/> Delete Selected</button>
                     </div>
