@@ -119,13 +119,13 @@ export const DOCK_ITEMS: DockItemConfig[] = [
   { id: 'dataUpload', label: 'Upload Data', icon: UploadIcon },
   { id: 'dataTable', label: 'Data Table', icon: TableIcon },
   { id: 'visualizations', label: 'Charts', icon: ChartIcon },
-  { id: 'map', label: 'Map View', icon: MapIcon },
+  { id: 'map', label: 'Enhanced Maps', icon: MapIcon },
   { id: 'pivotTable', label: 'Pivot Table', icon: PivotIcon },
   { id: 'aiAssistant', label: 'AI Assistant', icon: AIAssistantIcon },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
-export const MODEL_TEXT = 'gemini-2.5-flash-preview-04-17';
+export const MODEL_TEXT = 'gemini-2.0-flash-exp';
 export const MODEL_IMAGE = 'imagen-3.0-generate-002';
 
 export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
@@ -141,7 +141,7 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     items: [
         { name: "Data Explorer", icon: TableIcon, viewId: 'dataTable'},
         { name: "Visualizations", icon: ChartIcon, viewId: 'visualizations'},
-        { name: "Map View", icon: MapIcon, viewId: 'map' },
+        { name: "Enhanced Maps", icon: MapIcon, viewId: 'map' },
         { name: "Pivot Tables", icon: PivotIcon, viewId: 'pivotTable'},
         { name: "Diagramming Matrix", icon: DiagramIcon, viewId: 'diagrammingMatrix' },
         { name: "Statistical Analysis", icon: StatsIcon, viewId: 'statisticalAnalysis' },
@@ -159,7 +159,7 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
   {
     title: "AI Tools",
     items: [
-      { name: "AI Assistant", icon: AIAssistantIcon, viewId: 'aiAssistant' },
+      { name: "Enhanced AI Assistant", icon: AIAssistantIcon, viewId: 'aiAssistant' },
       { name: "AI Insight Analyzer", icon: WandIcon, viewId: 'advancedAITools' },
     ]
   }
@@ -192,10 +192,10 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
             { name: "Welcome", viewId: 'welcome' },
             { name: "Dashboard", viewId: 'dashboard' },
             { name: "Data Explorer", viewId: 'dataTable' },
-            { name: "Map View", viewId: 'map'},
+            { name: "Enhanced Maps", viewId: 'map'},
             { name: "Pivot Tables", viewId: 'pivotTable' }, // Updated viewId
             { name: "Visualizations", viewId: 'visualizations' },
-            { name: "AI Assistant", viewId: 'aiAssistant' } 
+            { name: "Enhanced AI Assistant", viewId: 'aiAssistant' } 
         ]
     },
     {

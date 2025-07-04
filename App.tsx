@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useContext } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -20,13 +19,14 @@ import { FeaturesStatusModal } from './components/FeaturesStatusModal';
 import { AboutView } from './components/views/AboutView';
 import { StatisticalAnalysisView } from './components/views/StatisticalAnalysisView';
 import { WorkflowView } from './components/views/WorkflowView';
-import { AIAssistantView } from './components/views/AIAssistantView';
+import EnhancedAIAssistantView from './components/views/EnhancedAIAssistantView';
 import { DiagrammingMatrixView } from './components/views/DiagrammingMatrixView';
 import { RoutePlannerView } from './components/views/RoutePlannerView';
-import MapView from './components/views/MapView';
+import EnhancedMapView from './components/views/EnhancedMapView';
 import { DOCK_ITEMS, NAV_MENU_ITEMS, SIDEBAR_SECTIONS } from './constants';
 import { IconType, ViewKey, Theme } from './types'; 
 import { DataProvider } from './contexts/DataContext';
+import { apiRouter } from './services/apiRouter';
 
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewKey>('welcome');
@@ -35,6 +35,7 @@ const AppContent: React.FC = () => {
   const [showFeaturesModal, setShowFeaturesModal] = useState(false);
   const [genericFeatureName, setGenericFeatureName] = useState("Selected");
   const [isDockVisible, setIsDockVisible] = useState(true);
+  const [apiStatus, setApiStatus] = useState<'checking' | 'ready' | 'error'>('checking');
 
   const handleViewChange = useCallback((viewKey: ViewKey) => {
     setActiveView(viewKey);
@@ -53,12 +54,22 @@ const AppContent: React.FC = () => {
   }, []);
   
   useEffect(() => {
-    if (!process.env.API_KEY) {
-      console.warn("API_KEY environment variable is not set. AI features may not work.");
-    }
+    // Check API status on startup
+    const checkApiStatus = async () => {
+      try {
+        const health = await apiRouter.healthCheck();
+        setApiStatus(health.status === 'healthy' ? 'ready' : 'error');
+      } catch (error) {
+        setApiStatus('error');
+      }
+    };
+
+    checkApiStatus();
+
+    // Show features modal after API check
     const timer = setTimeout(() => {
       setShowFeaturesModal(true);
-    }, 1500); 
+    }, 2000); 
     
     return () => clearTimeout(timer);
   }, []);
@@ -126,6 +137,16 @@ const AppContent: React.FC = () => {
   return (
     <div className="relative h-screen flex flex-col overflow-hidden">
       <FuturisticBackground theme={defaultTheme} reduceMotion={false} />
+      
+      {/* API Status Indicator */}
+      {apiStatus !== 'ready' && (
+        <div className={`fixed top-20 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium ${
+          apiStatus === 'checking' ? 'bg-yellow-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          {apiStatus === 'checking' ? '🔄 Initializing AI...' : '⚠️ AI Offline'}
+        </div>
+      )}
+      
       <Navbar 
         onToggleSidebar={toggleSidebar} 
         isSidebarOpen={isSidebarOpen}
@@ -146,9 +167,9 @@ const AppContent: React.FC = () => {
           <div style={{ display: activeView === 'dataUpload' ? 'block' : 'none' }}><DataUploadView /></div>
           <div style={{ display: activeView === 'dataTable' ? 'block' : 'none' }}><DataTableView onNavigate={handleViewChange} /></div>
           <div style={{ display: activeView === 'visualizations' ? 'block' : 'none' }}><VisualizationView /></div>
-          <div style={{ display: activeView === 'map' ? 'block' : 'none', height: '100%' }}><MapView /></div>
+          <div style={{ display: activeView === 'map' ? 'block' : 'none', height: '100%' }}><EnhancedMapView /></div>
           <div style={{ display: activeView === 'settings' ? 'block' : 'none' }}><SettingsView /></div>
-          <div style={{ display: activeView === 'aiAssistant' ? 'block' : 'none' }}><AIAssistantView /></div>
+          <div style={{ display: activeView === 'aiAssistant' ? 'block' : 'none' }}><EnhancedAIAssistantView /></div>
           <div style={{ display: activeView === 'onlineConnectors' ? 'block' : 'none' }}><OnlineConnectorsView /></div>
           <div style={{ display: activeView === 'projectDetails' ? 'block' : 'none' }}><ProjectDetailsView /></div>
           <div style={{ display: activeView === 'advancedAITools' ? 'block' : 'none' }}><AdvancedAIToolsView /></div>
@@ -175,13 +196,21 @@ const AppContent: React.FC = () => {
 
       <button 
         onClick={toggleChat}
-        className="fixed bottom-24 right-6 bg-gradient-to-br from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white p-4 rounded-full shadow-lg z-[1001] transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-blue-400 flex items-center justify-center" // always 'flex' or 'block'
+        className={`fixed bottom-24 right-6 text-white p-4 rounded-full shadow-lg z-[1001] transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-blue-400 flex items-center justify-center ${
+          apiStatus === 'ready' 
+            ? 'bg-gradient-to-br from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600' 
+            : 'bg-gray-600 cursor-not-allowed opacity-50'
+        }`}
         aria-label="Toggle AI Chat"
+        disabled={apiStatus !== 'ready'}
       >
         <ChatBotIcon className="w-6 h-6" />
+        {apiStatus === 'ready' && (
+          <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+        )}
       </button>
 
-      {isChatOpen && <AIChat onClose={toggleChat} />}
+      {isChatOpen && apiStatus === 'ready' && <AIChat onClose={toggleChat} />}
       <FeaturesStatusModal isOpen={showFeaturesModal} onClose={handleCloseFeaturesModal} />
     </div>
   );
