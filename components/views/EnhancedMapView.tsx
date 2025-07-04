@@ -55,6 +55,62 @@ interface DataVisualizationSettings {
     animateTransitions: boolean;
 }
 
+// Helper function to convert GeoJSON coordinates to SVG path
+const coordinatesToPath = (geometry: GeoJsonGeometry): string => {
+    if (!geometry || !geometry.coordinates) return '';
+    
+    const project = (lat: number, lon: number): { x: number, y: number } => {
+        const x = (lon + 180) * (MAP_WIDTH / 360);
+        const y = (MAP_HEIGHT / 2) - (MAP_WIDTH * Math.log(Math.tan((Math.PI / 4) + (lat * Math.PI / 180) / 2))) / (2 * Math.PI);
+        return { x, y };
+    };
+
+    const coordsToPath = (coords: any[]): string => {
+        if (!coords || coords.length === 0) return '';
+        
+        let path = '';
+        coords.forEach((coord, i) => {
+            if (Array.isArray(coord[0])) {
+                // Multi-dimensional array (polygon rings)
+                coord.forEach((ring: any[], ringIndex: number) => {
+                    ring.forEach((point: number[], pointIndex: number) => {
+                        const { x, y } = project(point[1], point[0]);
+                        if (ringIndex === 0 && pointIndex === 0) {
+                            path += `M ${x} ${y}`;
+                        } else {
+                            path += ` L ${x} ${y}`;
+                        }
+                    });
+                    path += ' Z';
+                });
+            } else {
+                // Simple coordinate array
+                const { x, y } = project(coord[1], coord[0]);
+                if (i === 0) {
+                    path += `M ${x} ${y}`;
+                } else {
+                    path += ` L ${x} ${y}`;
+                }
+            }
+        });
+        
+        return path;
+    };
+
+    switch (geometry.type) {
+        case 'Polygon':
+            return coordsToPath(geometry.coordinates);
+        case 'MultiPolygon':
+            return geometry.coordinates.map(polygon => coordsToPath(polygon)).join(' ');
+        case 'LineString':
+            return coordsToPath(geometry.coordinates);
+        case 'MultiLineString':
+            return geometry.coordinates.map(line => coordsToPath(line)).join(' ');
+        default:
+            return '';
+    }
+};
+
 const EnhancedMapView: React.FC = () => {
     const { tableData, fileHeaders } = useContext(DataContext);
     
@@ -645,7 +701,7 @@ const EnhancedMapView: React.FC = () => {
                                     return (
                                         <path
                                             key={id}
-                                            d={/* coordinatesToPath function would go here */}
+                                            d={coordinatesToPath(feature.geometry!)}
                                             className={`map-path ${selectedFeatureId === id ? 'selected' : ''}`}
                                             fill={style.fill || "rgba(139, 92, 246, 0.2)"}
                                             stroke={style.stroke || "#8b5cf6"}
