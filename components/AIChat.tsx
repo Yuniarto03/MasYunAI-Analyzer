@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { GoogleGenAI, GenerateContentResponse, Chat, GroundingChunk as GenAIGroundingChunk } from '@google/genai';
 import { MODEL_TEXT } from '../constants';
@@ -54,12 +53,15 @@ export const AIChat: React.FC<AIChatProps> = ({ onClose }) => {
   
   useEffect(() => {
     try {
-      if (!process.env.API_KEY) {
+      // Use the provided API key
+      const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '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';
+      
+      if (!apiKey) {
         setError("API_KEY is not configured. Chatbot will not function.");
         console.error("API_KEY environment variable not set.");
         return;
       }
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const newChat = ai.chats.create({
         model: MODEL_TEXT,
         config: {

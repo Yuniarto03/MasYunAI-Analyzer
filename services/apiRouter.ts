@@ -6,8 +6,11 @@ export class APIRouter {
     private static instance: APIRouter;
     private client: GoogleGenAI | null = null;
     private isInitialized = false;
+    private apiKey: string;
 
     private constructor() {
+        // Use the provided API key
+        this.apiKey = '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';
         this.initialize();
     }
 
@@ -20,14 +23,17 @@ export class APIRouter {
 
     private initialize() {
         try {
-            if (!process.env.API_KEY) {
-                console.warn("API_KEY not found in environment variables");
+            // Use the hardcoded API key if environment variable is not available
+            const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || this.apiKey;
+            
+            if (!apiKey) {
+                console.warn("No API key found");
                 return;
             }
             
-            this.client = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            this.client = new GoogleGenAI({ apiKey });
             this.isInitialized = true;
-            console.log("✅ API Router initialized successfully");
+            console.log("✅ API Router initialized successfully with provided key");
         } catch (error) {
             console.error("❌ Failed to initialize API Router:", error);
         }
