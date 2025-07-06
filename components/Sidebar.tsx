@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { SIDEBAR_SECTIONS } from '../constants';
 import { IconType, ViewKey, SidebarItemConfig } from '../types';
@@ -50,8 +48,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView
   // Ensure refs are created for each item
   SIDEBAR_SECTIONS.forEach(section => {
     section.items.forEach(item => {
-      if (!itemsRef.current[item.viewId]) {
-        itemsRef.current[item.viewId] = React.createRef<HTMLAnchorElement>();
+      if (!itemsRef.current[item.name]) {
+        itemsRef.current[item.name] = React.createRef<HTMLAnchorElement>();
       }
     });
   });
@@ -106,11 +104,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView
               <div className="space-y-1">
                 {section.items.map((item) => (
                   <SidebarItem 
-                    key={item.viewId} 
+                    key={item.name} 
                     item={item} 
                     onNavigate={onNavigate}
                     isActive={activeView === item.viewId}
-                    itemRef={itemsRef.current[item.viewId]}
+                    itemRef={itemsRef.current[item.name]}
                   />
                 ))}
               </div>
