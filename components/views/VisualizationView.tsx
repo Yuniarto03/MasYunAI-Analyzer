@@ -1,3 +1,4 @@
+
 import React, { useContext, useState, useMemo, useCallback, DragEvent, useEffect, useRef } from 'react';
 import { Panel } from '../Panel';
 import { DataContext } from '../../contexts/DataContext';
@@ -6,7 +7,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, RadarChart, PolarGrid, 
   PolarAngleAxis, PolarRadiusAxis, Radar, Brush, LabelList, ReferenceLine
 } from 'recharts';
-import { ChartDataItem, AggregatorType, PivotValueFieldConfig, PivotFilterConfig } from '../../types';
+import { ChartDataItem, AggregatorType, PivotValueFieldConfig, PivotFilterConfig, ChartState, initialChartState } from '../../types';
 
 // --- ICONS ---
 const CloseIcon: React.FC<{className?: string}> = ({className = "w-3 h-3"}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>;
@@ -191,49 +192,6 @@ const ColorPickerPopover: React.FC<{ anchorEl: HTMLElement | null; onClose: () =
     );
 };
 
-// --- TYPES FOR DUAL CHART SETUP ---
-interface ChartState {
-    chartType: string;
-    xAxisField: string | null;
-    yAxisFields: PivotValueFieldConfig[];
-    filterConfigs: PivotFilterConfig[];
-    chartOptions: {
-        showDataLabels: boolean;
-        stackData: boolean;
-        showGrid: boolean;
-        legendPosition: string;
-        colorTheme: string;
-    };
-    referenceLineConfig: {
-        enabled: boolean;
-        type: string;
-        field: string;
-        value: number;
-        color: string;
-    };
-}
-
-const initialChartState: ChartState = {
-    chartType: 'bar',
-    xAxisField: null,
-    yAxisFields: [],
-    filterConfigs: [],
-    chartOptions: {
-        showDataLabels: false,
-        stackData: false,
-        showGrid: true,
-        legendPosition: 'bottom',
-        colorTheme: 'cyberpunkNight',
-    },
-    referenceLineConfig: {
-        enabled: false,
-        type: 'average',
-        field: '',
-        value: 0,
-        color: '#facc15'
-    }
-};
-
 interface ActiveFilterConfig {
     field: string;
     selectedValues: (string | number)[];
@@ -250,7 +208,7 @@ interface ActiveColorPickerConfig {
 const ChartInstance: React.FC<{
     chartId: 1 | 2,
     state: ChartState,
-    setState: React.Dispatch<React.SetStateAction<ChartState>>,
+    setState: (updater: (prevState: ChartState) => ChartState) => void,
     isActive: boolean,
     onSetActive: () => void,
     onDuplicate: () => void,
@@ -456,10 +414,17 @@ const ChartInstance: React.FC<{
 
 // --- MAIN VIEW ---
 const VisualizationView: React.FC = () => {
-    const { tableData, fileHeaders } = useContext(DataContext);
+    const { tableData, fileHeaders, visualizationState, setVisualizationState } = useContext(DataContext);
+    const { chart1: chartState1, chart2: chartState2 } = visualizationState;
 
-    const [chartState1, setChartState1] = useState<ChartState>(initialChartState);
-    const [chartState2, setChartState2] = useState<ChartState>({ ...initialChartState, chartOptions: {...initialChartState.chartOptions, colorTheme: 'cosmicFunk'} });
+    const setChartState1 = (updater: (prevState: ChartState) => ChartState) => {
+        setVisualizationState(prev => ({ ...prev, chart1: updater(prev.chart1) }));
+    };
+
+    const setChartState2 = (updater: (prevState: ChartState) => ChartState) => {
+        setVisualizationState(prev => ({ ...prev, chart2: updater(prev.chart2) }));
+    };
+    
     const [activeEditor, setActiveEditor] = useState<1 | 2>(1);
     
     const [draggedItem, setDraggedItem] = useState<{ field: string; source: 'xAxis' | 'yAxis' | 'filters', sourceChartId?: 1 | 2 } | null>(null);
@@ -471,7 +436,7 @@ const VisualizationView: React.FC = () => {
     const [selectedAvailableField, setSelectedAvailableField] = useState<string | null>(null);
 
 
-    const { numericalHeaders, categoricalHeaders } = useMemo(() => {
+    const { numericalHeaders } = useMemo(() => {
       if (!tableData || tableData.length === 0 || !fileHeaders) return { numericalHeaders: [], categoricalHeaders: [] };
       const numerical = fileHeaders.filter(h => tableData.every(row => { const v = row[h]; return v === null || v === undefined || String(v).trim() === '' || !isNaN(Number(v)); }));
       const categorical = fileHeaders.filter(h => !numerical.includes(h));
@@ -654,13 +619,13 @@ const VisualizationView: React.FC = () => {
                             isActive={true}
                             onSetActive={() => {}}
                             onDuplicate={() => {
-                                if (maximizedChart === 1) setChartState2(chartState1);
-                                else setChartState1(chartState2);
+                                if (maximizedChart === 1) setChartState2(() => chartState1);
+                                else setChartState1(() => chartState2);
                                 setMaximizedChart(null);
                             }}
                             onClear={() => {
-                                if (maximizedChart === 1) setChartState1(initialChartState);
-                                else setChartState2(initialChartState);
+                                const updater = (maximizedChart === 1) ? setChartState1 : setChartState2;
+                                updater(() => initialChartState);
                                 setMaximizedChart(null);
                             }}
                             onMaximize={() => setMaximizedChart(null)}
@@ -731,8 +696,8 @@ const VisualizationView: React.FC = () => {
                             setState={setChartState1} 
                             isActive={activeEditor === 1} 
                             onSetActive={() => setActiveEditor(1)} 
-                            onDuplicate={() => setChartState2(chartState1)}
-                            onClear={() => setChartState1(initialChartState)}
+                            onDuplicate={() => setChartState2(() => chartState1)}
+                            onClear={() => setChartState1(() => initialChartState)}
                             onMaximize={() => setMaximizedChart(1)}
                             tableData={tableData} numericalHeaders={numericalHeaders}
                             handleDragStart={handleDragStart} handleRemoveField={handleRemoveField}
@@ -746,8 +711,8 @@ const VisualizationView: React.FC = () => {
                             setState={setChartState2} 
                             isActive={activeEditor === 2} 
                             onSetActive={() => setActiveEditor(2)} 
-                            onDuplicate={() => setChartState1(chartState2)}
-                            onClear={() => setChartState2(initialChartState)}
+                            onDuplicate={() => setChartState1(() => chartState2)}
+                            onClear={() => setChartState2(() => initialChartState)}
                             onMaximize={() => setMaximizedChart(2)}
                             tableData={tableData} numericalHeaders={numericalHeaders}
                             handleDragStart={handleDragStart} handleRemoveField={handleRemoveField}

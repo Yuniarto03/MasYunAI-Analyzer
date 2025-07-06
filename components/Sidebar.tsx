@@ -1,3 +1,5 @@
+
+
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { SIDEBAR_SECTIONS } from '../constants';
 import { IconType, ViewKey, SidebarItemConfig } from '../types';
@@ -104,7 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView
               <div className="space-y-1">
                 {section.items.map((item) => (
                   <SidebarItem 
-                    key={item.name} 
+                    key={item.viewId} 
                     item={item} 
                     onNavigate={onNavigate}
                     isActive={activeView === item.viewId}

@@ -10,14 +10,11 @@ import { LatLngTuple, TravelMode } from '../types';
 let ai: GoogleGenAI | null = null;
 
 const getClient = (): GoogleGenAI => {
-  // Use the provided API key
-  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || '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';
-  
-  if (!apiKey) {
+  if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable is not set.");
   }
   if (!ai) {
-    ai = new GoogleGenAI({ apiKey });
+    ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
   return ai;
 };
@@ -487,4 +484,5 @@ export const analyzeTextWithGemini = async (
     }
 };
 
-console.log('Gemini Service initialized with provided API key.');
+
+console.log('Gemini Service initialized. Ensure API_KEY is set in your environment.');

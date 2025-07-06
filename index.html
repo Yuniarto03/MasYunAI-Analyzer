@@ -17,23 +17,28 @@
             color: white;
             overflow: hidden; /* Prevent scrollbars on body due to fixed elements */
         }
-        /* Custom scrollbar for webkit browsers - Magenta/Blue Holographic Theme */
+        /* Custom scrollbar for webkit browsers - Magenta/Cyan/Blue Holographic Theme */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: rgba(14, 24, 45, 0.5); /* Dark blue, semi-transparent base, matching panels */
+            background: rgba(14, 24, 45, 0.5); /* Dark blue, semi-transparent base */
             border-radius: 10px;
         }
         ::-webkit-scrollbar-thumb {
-            background: linear-gradient(45deg, #d946ef, #3b82f6); /* Magenta to Blue gradient */
+            background: linear-gradient(45deg, #d946ef, #22d3ee, #3b82f6); /* Magenta to Cyan to Blue */
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: background 0.2s ease-in-out;
+            transition: all 0.2s ease-in-out;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(45deg, #f0abfc, #60a5fa); /* Brighter Magenta to Blue gradient on hover */
+            background: linear-gradient(45deg, #f0abfc, #67e8f9, #60a5fa); /* Brighter gradient on hover */
+            box-shadow: 0 0 8px rgba(103, 232, 249, 0.5); /* Cyan glow on hover */
+        }
+        ::-webkit-scrollbar-thumb:active {
+            background: linear-gradient(135deg, #f0abfc, #67e8f9, #60a5fa); /* Inverted gradient on click */
+            box-shadow: inset 0 0 5px rgba(255, 255, 255, 0.4); /* Inner glow on click */
         }
         .hide-scrollbar::-webkit-scrollbar {
             display: none; /* For Webkit browsers */
@@ -441,83 +446,95 @@
             filter: drop-shadow(0 0 10px currentColor);
         }
         
-        /* --- NEW: Floating Dock Styles --- */
-        .dock-item {
-          position: relative;
-          width: 64px;
-          height: 64px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bouncy transition */
-          border: 2px solid rgba(255, 255, 255, 0.2);
-          box-shadow: 
-            0 5px 15px rgba(0,0,0,0.3),
-            inset 0 2px 2px rgba(255, 255, 255, 0.2),
-            inset 0 -2px 2px rgba(0,0,0,0.3);
-          -webkit-backdrop-filter: blur(10px);
-          backdrop-filter: blur(10px);
-          cursor: pointer;
+        /* --- NEW: Holographic Glass Dock Styles --- */
+        .glass-dock-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            background: rgba(30, 41, 59, 0.5); /* Semi-transparent dark blue */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 9999px; /* Pill shape */
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.1);
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .glass-dock-items {
+            display: flex;
+            gap: 12px; /* Space between items */
+            position: relative;
+            z-index: 2; /* Items above the spotlight */
+        }
+
+        .dock-spotlight {
+            position: absolute;
+            top: 6px;
+            left: 0;
+            height: calc(100% - 12px);
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.4), transparent 70%);
+            border-radius: 9999px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .glass-dock-item {
+            width: 56px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s ease-out;
+        }
+
+        .glass-dock-item:hover {
+            transform: scale(1.15) translateY(-4px);
         }
 
         .dock-item-icon {
-          width: 36px;
-          height: 36px;
-          color: white;
-          filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
-          transition: transform 0.2s ease-out;
+            width: 32px;
+            height: 32px;
+            color: white;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+            transition: filter 0.2s ease;
         }
 
-        .dock-item:hover .dock-item-icon {
-          transform: scale(1.1);
+        .glass-dock-item:hover .dock-item-icon {
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)) drop-shadow(0 0 5px #fff);
         }
 
-        .dock-item.active {
-          box-shadow: 
-            0 0 0 3px rgba(255,255,255,0.8),
-            0 0 20px 5px var(--glow-color, #00D4FF),
-            0 5px 15px rgba(0,0,0,0.3),
-            inset 0 2px 2px rgba(255, 255, 255, 0.2),
-            inset 0 -2px 2px rgba(0,0,0,0.3);
+        .dock-tooltip {
+            position: absolute;
+            bottom: 100%; /* Position above the item */
+            margin-bottom: 12px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            color: white;
+            background: rgba(14, 24, 45, 0.8);
+            backdrop-filter: blur(5px);
+            border-radius: 6px;
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            white-space: nowrap;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            pointer-events: none;
         }
 
-        /* Color Gradients */
-        .dock-item-blue { 
-          --glow-color: #3b82f6;
-          background: radial-gradient(circle at 30% 30%, #60a5fa, #3b82f6); 
-        }
-        .dock-item-green { 
-          --glow-color: #22c55e;
-          background: radial-gradient(circle at 30% 30%, #4ade80, #22c55e); 
-        }
-        .dock-item-purple { 
-          --glow-color: #a855f7;
-          background: radial-gradient(circle at 30% 30%, #c084fc, #a855f7); 
-        }
-        .dock-item-orange { 
-          --glow-color: #f97316;
-          background: radial-gradient(circle at 30% 30%, #fb923c, #f97316); 
-        }
-        .dock-item-red { 
-          --glow-color: #ef4444;
-          background: radial-gradient(circle at 30% 30%, #f87171, #ef4444); 
-        }
-        .dock-item-indigo { 
-          --glow-color: #6366f1;
-          background: radial-gradient(circle at 30% 30%, #818cf8, #6366f1); 
-        }
-        .dock-item-lime { 
-          --glow-color: #84cc16;
-          background: radial-gradient(circle at 30% 30%, #a3e635, #84cc16); 
-        }
-        .dock-item-cyan { 
-          --glow-color: #22d3ee;
-          background: radial-gradient(circle at 30% 30%, #67e8f9, #22d3ee); 
-        }
-        .dock-item-gray { 
-          --glow-color: #9ca3af;
-          background: radial-gradient(circle at 30% 30%, #e5e7eb, #9ca3af); 
+        .glass-dock-item:hover .dock-tooltip {
+            opacity: 1;
+            transform: translateY(0);
         }
 
         /* --- UPDATED: Diagramming Matrix Styles (PERFORMANCE) --- */

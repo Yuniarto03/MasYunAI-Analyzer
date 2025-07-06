@@ -153,10 +153,7 @@ const chartTooltipProps = {
 
 
 export const PivotTableView: React.FC = () => {
-  const { tableData, fileHeaders, pivotSourceData, setPivotSourceData } = useContext(DataContext); 
-
-  const [pivotReports, setPivotReports] = useState<PivotReportState[]>([]);
-  const [activePivotId, setActivePivotId] = useState<string | null>(null);
+  const { tableData, fileHeaders, pivotSourceData, setPivotSourceData, pivotReports, setPivotReports, activePivotId, setActivePivotId } = useContext(DataContext); 
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -182,7 +179,7 @@ export const PivotTableView: React.FC = () => {
         report.id === activePivotId ? updater(report) : report
       )
     );
-  }, [activePivotId]);
+  }, [activePivotId, setPivotReports]);
 
   const aggregate = useCallback((valuesArray: CellValue[], aggregatorType: AggregatorType, fieldIsTextual: boolean): number | string | undefined => {
     let currentAggregator = aggregatorType;
@@ -372,7 +369,7 @@ export const PivotTableView: React.FC = () => {
                 }
             }, 100);
         }
-    }, [pivotSourceData, setPivotSourceData, aggregate, isValueFieldTextual, getAllPossibleRowKeys, pivotReports.length]);
+    }, [pivotSourceData, setPivotSourceData, aggregate, isValueFieldTextual, getAllPossibleRowKeys, pivotReports.length, setActivePivotId, setPivotReports, fileHeaders]);
 
 
   useEffect(() => {
@@ -381,7 +378,7 @@ export const PivotTableView: React.FC = () => {
         setPivotReports([initialReport]);
         setActivePivotId(initialReport.id);
     }
-  }, [fileHeaders, pivotReports.length]);
+  }, [fileHeaders, pivotReports.length, setActivePivotId, setPivotReports]);
   
   useEffect(() => {
     if (renamingReportId && renameInputRef.current) {
@@ -618,8 +615,8 @@ export const PivotTableView: React.FC = () => {
                 });
         });
 
-        if (config.rowFields.length > 0 || config.colFields.length > 0 || (config.colFields.length === 0 && config.valueFields.length > 1)) {
-            const overallGrandTotals = (localDataMap.get('_TOTAL_#_TOTAL_') || Array.from({ length: config.valueFields.length }, () => [] as ValuesForOneField))
+        if (config.rowFields.length > 0 || config.colFields.length > 0 || (config.colFields.length === 0 && config.valueFields.length > 1) ) { 
+           const overallGrandTotals = (localDataMap.get('_TOTAL_#_TOTAL_') || Array.from({ length: config.valueFields.length }, () => [] as ValuesForOneField))
                 .map((values, vfIndex) => {
                     const vfConfig = config.valueFields[vfIndex];
                     return aggregate(values, vfConfig.aggregator, isValueFieldTextual(vfConfig.field, augmentedData));
@@ -1123,7 +1120,7 @@ export const PivotTableView: React.FC = () => {
             </div>
         )}
 
-        {isCalcFieldModalOpen && (
+        {isCalcFieldModalOpen && activePivot && (
             <CalculatedFieldManagerModal
                 isOpen={isCalcFieldModalOpen}
                 onClose={() => setIsCalcFieldModalOpen(false)}

@@ -40,7 +40,7 @@ export type FileHeaders = string[];
 
 export interface ChartDataItem {
   name: string; // Typically the category axis
-  [key: string]: number | string; // Allows multiple Y-axis values or other series data
+  [key:string]: number | string; // Allows multiple Y-axis values or other series data
 }
 
 export type ViewKey = 
@@ -372,8 +372,8 @@ export interface AppContextType {
     reduceMotion: boolean;
 }
 
-// --- NEW TYPES FOR DYNAMIC DASHBOARD ---
-export type WidgetType = 'kpi' | 'bar' | 'line' | 'pie' | 'table';
+// --- DYNAMIC DASHBOARD & VISUALIZATION TYPES ---
+export type WidgetType = 'kpi' | 'bar' | 'line' | 'pie' | 'table' | 'embeddedChart';
 
 export interface BaseWidgetConfig {
     id: string;
@@ -403,7 +403,55 @@ export interface TableWidgetConfig extends BaseWidgetConfig {
     rowCount: number;
 }
 
-export type DashboardWidget = KPIWidgetConfig | ChartWidgetConfig | TableWidgetConfig;
+export interface EmbeddedChartWidgetConfig extends BaseWidgetConfig {
+    type: 'embeddedChart';
+    sourceView: 'visualizations' | 'pivotTable' | null;
+    sourceId: string | null;
+}
+
+export type DashboardWidget = KPIWidgetConfig | ChartWidgetConfig | TableWidgetConfig | EmbeddedChartWidgetConfig;
+
+export interface ChartState {
+    chartType: string;
+    xAxisField: string | null;
+    yAxisFields: PivotValueFieldConfig[];
+    filterConfigs: PivotFilterConfig[];
+    chartOptions: {
+        showDataLabels: boolean;
+        stackData: boolean;
+        showGrid: boolean;
+        legendPosition: string;
+        colorTheme: string;
+    };
+    referenceLineConfig: {
+        enabled: boolean;
+        type: string;
+        field: string;
+        value: number;
+        color: string;
+    };
+}
+
+export const initialChartState: ChartState = {
+    chartType: 'bar',
+    xAxisField: null,
+    yAxisFields: [],
+    filterConfigs: [],
+    chartOptions: {
+        showDataLabels: false,
+        stackData: false,
+        showGrid: true,
+        legendPosition: 'bottom',
+        colorTheme: 'cyberpunkNight',
+    },
+    referenceLineConfig: {
+        enabled: false,
+        type: 'average',
+        field: '',
+        value: 0,
+        color: '#facc15'
+    }
+};
 
 // --- NEW TYPES FOR GEOJSON MAP VIEW ---
 export interface GeoJsonProperties {

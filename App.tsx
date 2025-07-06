@@ -1,3 +1,5 @@
+
+
 import React, { useState, useCallback, useEffect, useContext } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -19,14 +21,22 @@ import { FeaturesStatusModal } from './components/FeaturesStatusModal';
 import { AboutView } from './components/views/AboutView';
 import { StatisticalAnalysisView } from './components/views/StatisticalAnalysisView';
 import { WorkflowView } from './components/views/WorkflowView';
-import EnhancedAIAssistantView from './components/views/EnhancedAIAssistantView';
+import { AIAssistantView } from './components/views/AIAssistantView';
 import { DiagrammingMatrixView } from './components/views/DiagrammingMatrixView';
 import { RoutePlannerView } from './components/views/RoutePlannerView';
-import EnhancedMapView from './components/views/EnhancedMapView';
+import MapView from './components/views/MapView';
 import { DOCK_ITEMS, NAV_MENU_ITEMS, SIDEBAR_SECTIONS } from './constants';
-import { IconType, ViewKey, Theme } from './types'; 
+import { IconType, ViewKey, Theme, IconProps } from './types'; 
 import { DataProvider } from './contexts/DataContext';
-import { apiRouter } from './services/apiRouter';
+
+// Polyfill process.env for browser environment and set the API key.
+// In a real production environment, this would be handled by build tools and environment variables.
+if (typeof process === 'undefined') {
+  // @ts-ignore
+  globalThis.process = { env: {} };
+}
+// @ts-ignore
+process.env.API_KEY = "AIzaSyCm5LAy0zEhFCRCp6e4c7nGIcyExJLViIc";
 
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewKey>('welcome');
@@ -35,7 +45,6 @@ const AppContent: React.FC = () => {
   const [showFeaturesModal, setShowFeaturesModal] = useState(false);
   const [genericFeatureName, setGenericFeatureName] = useState("Selected");
   const [isDockVisible, setIsDockVisible] = useState(true);
-  const [apiStatus, setApiStatus] = useState<'checking' | 'ready' | 'error'>('checking');
 
   const handleViewChange = useCallback((viewKey: ViewKey) => {
     setActiveView(viewKey);
@@ -54,22 +63,12 @@ const AppContent: React.FC = () => {
   }, []);
   
   useEffect(() => {
-    // Check API status on startup
-    const checkApiStatus = async () => {
-      try {
-        const health = await apiRouter.healthCheck();
-        setApiStatus(health.status === 'healthy' ? 'ready' : 'error');
-      } catch (error) {
-        setApiStatus('error');
-      }
-    };
-
-    checkApiStatus();
-
-    // Show features modal after API check
+    if (!process.env.API_KEY) {
+      console.warn("API_KEY environment variable is not set. AI features may not work.");
+    }
     const timer = setTimeout(() => {
       setShowFeaturesModal(true);
-    }, 2000); 
+    }, 1500); 
     
     return () => clearTimeout(timer);
   }, []);
@@ -137,16 +136,6 @@ const AppContent: React.FC = () => {
   return (
     <div className="relative h-screen flex flex-col overflow-hidden">
       <FuturisticBackground theme={defaultTheme} reduceMotion={false} />
-      
-      {/* API Status Indicator */}
-      {apiStatus !== 'ready' && (
-        <div className={`fixed top-20 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium ${
-          apiStatus === 'checking' ? 'bg-yellow-600 text-white' : 'bg-red-600 text-white'
-        }`}>
-          {apiStatus === 'checking' ? '🔄 Initializing AI...' : '⚠️ AI Offline'}
-        </div>
-      )}
-      
       <Navbar 
         onToggleSidebar={toggleSidebar} 
         isSidebarOpen={isSidebarOpen}
@@ -167,9 +156,9 @@ const AppContent: React.FC = () => {
           <div style={{ display: activeView === 'dataUpload' ? 'block' : 'none' }}><DataUploadView /></div>
           <div style={{ display: activeView === 'dataTable' ? 'block' : 'none' }}><DataTableView onNavigate={handleViewChange} /></div>
           <div style={{ display: activeView === 'visualizations' ? 'block' : 'none' }}><VisualizationView /></div>
-          <div style={{ display: activeView === 'map' ? 'block' : 'none', height: '100%' }}><EnhancedMapView /></div>
+          <div style={{ display: activeView === 'map' ? 'block' : 'none', height: '100%' }}><MapView /></div>
           <div style={{ display: activeView === 'settings' ? 'block' : 'none' }}><SettingsView /></div>
-          <div style={{ display: activeView === 'aiAssistant' ? 'block' : 'none' }}><EnhancedAIAssistantView /></div>
+          <div style={{ display: activeView === 'aiAssistant' ? 'block' : 'none' }}><AIAssistantView /></div>
           <div style={{ display: activeView === 'onlineConnectors' ? 'block' : 'none' }}><OnlineConnectorsView /></div>
           <div style={{ display: activeView === 'projectDetails' ? 'block' : 'none' }}><ProjectDetailsView /></div>
           <div style={{ display: activeView === 'advancedAITools' ? 'block' : 'none' }}><AdvancedAIToolsView /></div>
@@ -196,21 +185,13 @@ const AppContent: React.FC = () => {
 
       <button 
         onClick={toggleChat}
-        className={`fixed bottom-24 right-6 text-white p-4 rounded-full shadow-lg z-[1001] transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-blue-400 flex items-center justify-center ${
-          apiStatus === 'ready' 
-            ? 'bg-gradient-to-br from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600' 
-            : 'bg-gray-600 cursor-not-allowed opacity-50'
-        }`}
+        className="fixed bottom-24 right-6 bg-gradient-to-br from-purple-600 to-blue-500 w-14 h-14 rounded-full shadow-lg z-[1001] transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-blue-400 flex items-center justify-center overflow-hidden"
         aria-label="Toggle AI Chat"
-        disabled={apiStatus !== 'ready'}
       >
-        <ChatBotIcon className="w-6 h-6" />
-        {apiStatus === 'ready' && (
-          <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-        )}
+        <MasYunIcon className="w-full h-full object-cover" />
       </button>
 
-      {isChatOpen && apiStatus === 'ready' && <AIChat onClose={toggleChat} />}
+      {isChatOpen && <AIChat onClose={toggleChat} />}
       <FeaturesStatusModal isOpen={showFeaturesModal} onClose={handleCloseFeaturesModal} />
     </div>
   );
@@ -239,9 +220,13 @@ const EyeSlashIcon: IconType = ({ className }) => (
 );
 
 
-// Placeholder for ChatBotIcon - ideally use an SVG library or actual SVG
-const ChatBotIcon: IconType = ({ className }) => (
-  <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.55 19.05 A8 8 0 0110 21 8 8 0 012 13 8 8 0 0110 5 8 8 0 0117.55 10.95 M19 13 A7 7 0 1112 6 V 3 M16 16 S 19 13 21 13 M12 17H12.01 M12 13H12.01 M7 13H7.01" />
-  </svg>
+const base64Icon = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAH0AfQDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1VWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8MTIxMjJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8A+qKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigA-..';
+const MasYunIcon: React.FC<IconProps> = ({ className }) => (
+  <img src={base64Icon} alt="MasYunAI" className={className} />
 );
+
+// const ChatBotIcon: IconType = ({ className }) => (
+//   <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+//     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.55 19.05 A8 8 0 0110 21 8 8 0 012 13 8 8 0 0110 5 8 8 0 0117.55 10.95 M19 13 A7 7 0 1112 6 V 3 M16 16 S 19 13 21 13 M12 17H12.01 M12 13H12.01 M7 13H7.01" />
+//   </svg>
+// );
