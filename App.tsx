@@ -10,7 +10,7 @@ import { WelcomeView } from './components/views/WelcomeView';
 import { DashboardView } from './components/views/DashboardView';
 import { DataUploadView } from './components/views/DataUploadView';
 import { DataTableView } from './components/views/DataTableView';
-import VisualizationView from './components/views/VisualizationView';
+import { VisualizationView } from './components/views/VisualizationView';
 import { SettingsView } from './components/views/SettingsView';
 import { OnlineConnectorsView } from './components/views/OnlineConnectorsView';
 import { ProjectDetailsView } from './components/views/ProjectDetailsView';
