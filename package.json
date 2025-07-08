@@ -15,6 +15,7 @@
     "recharts": "^3.0.0",
     "react-dropzone": "^14.3.8",
     "three": "^0.177.0",
+    "three/examples/jsm/controls/OrbitControls.js": "latest",
     "xlsx": "^0.18.5",
     "marked": "^14.0.0",
     "lucide-react": "^0.525.0",
