@@ -35,8 +35,13 @@ if (typeof process === 'undefined') {
   // @ts-ignore
   globalThis.process = { env: {} };
 }
+
+// Set API key from environment variables with fallback
 // @ts-ignore
-process.env.API_KEY = "AIzaSyCm5LAy0zEhFCRCp6e4c7nGIcyExJLViIc";
+if (!process.env.API_KEY && !process.env.VITE_GEMINI_API_KEY) {
+  // @ts-ignore
+  process.env.API_KEY = "AIzaSyCm5LAy0zEhFCRCp6e4c7nGIcyExJLViIc";
+}
 
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewKey>('welcome');
@@ -63,7 +68,8 @@ const AppContent: React.FC = () => {
   }, []);
   
   useEffect(() => {
-    if (!process.env.API_KEY) {
+    const apiKey = process.env.API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
       console.warn("API_KEY environment variable is not set. AI features may not work.");
     }
     const timer = setTimeout(() => {

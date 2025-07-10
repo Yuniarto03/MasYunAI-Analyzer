@@ -6,17 +6,156 @@ import { GoogleGenAI, GenerateContentResponse, GenerateContentParameters } from 
 import { MODEL_TEXT } from '../constants';
 import { marked } from 'marked'; // Using a proper markdown parser for safety and features
 import { LatLngTuple, TravelMode } from '../types';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure PDF.js worker for Vercel deployment
+if (typeof window !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+}
 
 let ai: GoogleGenAI | null = null;
 
 const getClient = (): GoogleGenAI => {
-  if (!process.env.API_KEY) {
+  const apiKey = process.env.API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     throw new Error("API_KEY environment variable is not set.");
   }
   if (!ai) {
-    ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    ai = new GoogleGenAI({ apiKey });
   }
   return ai;
+};
+
+// PDF Text Extraction Function
+export const extractTextFromPDF = async (file: File): Promise<string> => {
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = '';
+        
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+                .map((item: any) => item.str)
+                .join(' ');
+            fullText += pageText + '\n\n';
+        }
+        
+        return fullText.trim();
+    } catch (error) {
+        console.error('Error extracting PDF text:', error);
+        throw new Error('Failed to extract text from PDF. The file might be corrupted or password-protected.');
+    }
+};
+
+// Quantum AI Response Generator
+export const generateQuantumAIResponse = async (
+    prompt: string,
+    quantumMode: string,
+    files: { name: string; mimeType: string; data: string }[]
+): Promise<MultiFunctionalResponse> => {
+    const client = getClient();
+    
+    const quantumInstructions = {
+        'creative': `You are operating in Quantum Creative Synthesis Mode. Think beyond conventional boundaries, combine disparate concepts innovatively, and generate truly original solutions. Use lateral thinking, analogical reasoning, and creative synthesis to produce breakthrough ideas.`,
+        'analytical': `You are operating in Quantum Deep Analysis Mode. Perform multi-dimensional analysis with unprecedented depth. Examine patterns, correlations, causations, and hidden relationships. Provide insights that go beyond surface-level observations.`,
+        'strategic': `You are operating in Quantum Strategic Planning Mode. Think like a master strategist with access to multiple timelines and scenarios. Consider long-term implications, strategic positioning, risk assessment, and opportunity identification across multiple dimensions.`,
+        'research': `You are operating in Quantum Research Mode. Access and synthesize information with academic rigor and scientific precision. Provide comprehensive, well-sourced analysis with multiple perspectives and evidence-based conclusions.`,
+        'problem-solving': `You are operating in Quantum Problem Solver Mode. Decompose complex problems into manageable components, identify root causes, generate multiple solution pathways, and provide step-by-step implementation strategies.`,
+        'predictive': `You are operating in Quantum Predictive Analysis Mode. Analyze trends, patterns, and data to make informed predictions about future scenarios. Consider multiple variables, potential disruptions, and probabilistic outcomes.`
+    };
+    
+    const systemInstruction = `${quantumInstructions[quantumMode] || quantumInstructions['analytical']}
+
+You are an advanced AI with quantum-level processing capabilities within the MasYun Data Analyzer platform. Your responses should demonstrate:
+- Multi-dimensional thinking and analysis
+- Advanced pattern recognition
+- Innovative problem-solving approaches
+- Comprehensive understanding of complex relationships
+- Forward-thinking and strategic insights
+
+When asked to create files, format your entire response as raw content with [DL_FILENAME: filename.ext] on the first line if downloadable.`;
+    
+    const contents: any[] = [];
+    if(prompt) contents.push({ text: `[QUANTUM ${quantumMode.toUpperCase()} MODE] ${prompt}` });
+
+    files.forEach(file => {
+        contents.push({ text: `[User has included the file '${file.name}' for quantum analysis]` });
+        contents.push({
+            inlineData: {
+                mimeType: file.mimeType,
+                data: file.data,
+            }
+        });
+    });
+
+    try {
+        const response = await client.models.generateContent({
+            model: MODEL_TEXT,
+            contents: { parts: contents },
+            config: {
+                systemInstruction,
+                temperature: quantumMode === 'creative' ? 0.9 : 0.7,
+                topP: 0.95,
+                topK: 40,
+            }
+        });
+
+        let text = response.text;
+        const firstLineBreak = text.indexOf('\n');
+        const firstLine = firstLineBreak === -1 ? text : text.substring(0, firstLineBreak);
+
+        const dlRegex = /\[DL_FILENAME:\s*(.*?)\s*\]/;
+        const match = firstLine.match(dlRegex);
+
+        if (match && match[1]) {
+            const filename = match[1].trim();
+            const content = firstLineBreak === -1 ? '' : text.substring(firstLineBreak + 1);
+            
+            // Basic mime type detection from filename extension
+            const ext = filename.split('.').pop()?.toLowerCase() || '';
+            let mimeType = 'application/octet-stream';
+            if (ext === 'txt') mimeType = 'text/plain';
+            else if (ext === 'csv') mimeType = 'text/csv';
+            else if (ext === 'json') mimeType = 'application/json';
+            else if (ext === 'html') mimeType = 'text/html';
+            else if (ext === 'xml') mimeType = 'application/xml';
+            else if (ext === 'py') mimeType = 'text/x-python';
+            else if (ext === 'js') mimeType = 'application/javascript';
+            else if (ext === 'md') mimeType = 'text/markdown';
+            
+            return {
+                isDownloadable: true,
+                content: content,
+                filename: filename,
+                mimeType: mimeType
+            };
+        } else {
+            return {
+                isDownloadable: false,
+                content: text,
+                filename: '',
+                mimeType: ''
+            };
+        }
+    } catch (error) {
+        console.error('Error generating quantum AI response from Gemini:', error);
+        if (error instanceof Error) {
+            return {
+                isDownloadable: false,
+                content: `**Quantum AI Error:**\n\n> ${error.message}`,
+                filename: '',
+                mimeType: '',
+            };
+        }
+        return {
+            isDownloadable: false,
+            content: '**An unknown quantum AI error occurred.**',
+            filename: '',
+            mimeType: '',
+        };
+    }
 };
 
 // Generic command function for AI text generation
@@ -50,7 +189,11 @@ export const generateMultiFunctionalResponse = async (
     files: { name: string; mimeType: string; data: string }[]
 ): Promise<MultiFunctionalResponse> => {
     const client = getClient();
-    const systemInstruction = `You are a highly intelligent, multi-functional AI assistant within the MasYun Data Analyzer platform. You can analyze data, answer complex questions, generate code, write documents, and create file content based on user requests. When asked to create a file, format your entire response as a raw string containing ONLY the file's content. To specify the filename and type for download, you MUST place a directive on the very first line of your response in the format: [DL_FILENAME: a_good_filename.ext]. If you are just answering a question, do not include the DL_FILENAME directive.`;
+    const systemInstruction = `You are a highly intelligent, multi-functional AI assistant within the MasYun Data Analyzer platform. You can analyze data, answer complex questions, generate code, write documents, and create file content based on user requests. You have advanced capabilities for processing PDFs, images, and various file formats.
+    
+    When asked to create a file, format your entire response as a raw string containing ONLY the file's content. To specify the filename and type for download, you MUST place a directive on the very first line of your response in the format: [DL_FILENAME: a_good_filename.ext]. If you are just answering a question, do not include the DL_FILENAME directive.
+    
+    You can perform web searches for current information and provide comprehensive analysis of uploaded documents.`;
     
     const contents: any[] = [];
     if(prompt) contents.push({ text: prompt });
@@ -71,7 +214,8 @@ export const generateMultiFunctionalResponse = async (
             contents: { parts: contents },
             config: {
                 systemInstruction,
-                temperature: 0.6,
+                temperature: 0.7,
+                topP: 0.9,
             }
         });
 
