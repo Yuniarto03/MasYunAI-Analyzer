@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { IconType, ViewKey, NavMenuItemConfig as TopNavMenuItemConfig, NavSubMenuItemConfig } from '../types';
 import { NAV_MENU_ITEMS } from '../constants';
@@ -126,23 +127,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, isSidebarOpen, 
         
         <div className="text-sm text-gray-300 mr-4 whitespace-nowrap hidden lg:block" title={new Date().toString()}>
            {formatTime(currentTime)}
-        </div>
-
-        <div className="flex items-center space-x-3">
-          <div 
-            className="h-9 w-9 rounded-full bg-gradient-to-r from-purple-600 to-blue-500 flex items-center justify-center text-sm font-semibold cursor-pointer"
-            onClick={() => onNavigate('genericPlaceholder')} // Example: User profile might go to a generic placeholder or settings
-            title="User Profile"
-          >
-            JD
-          </div>
-          <button 
-            className="p-1 rounded-full text-gray-400 hover:text-white focus:outline-none hover:bg-gray-700"
-            onClick={() => onNavigate('genericPlaceholder')} // Example: User menu items might go to generic placeholder
-            title="User Menu"
-          >
-            <ChevronDownIcon className="h-6 w-6" />
-          </button>
         </div>
       </div>
     </nav>

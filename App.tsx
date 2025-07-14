@@ -3,6 +3,7 @@
 
 
 
+
 import React, { useState, useCallback, useEffect, useContext } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -29,6 +30,7 @@ import { DiagrammingMatrixView } from './components/views/DiagrammingMatrixView'
 import { RoutePlannerView } from './components/views/RoutePlannerView';
 import { WorkflowAutomationView } from './components/views/WorkflowAutomationView';
 import AiDocument from './components/views/AiDocument'; // Import the new view
+import { DataCleaningView } from './components/views/DataCleaningView';
 import { DOCK_ITEMS, NAV_MENU_ITEMS, SIDEBAR_SECTIONS } from './constants';
 import { IconType, ViewKey, Theme, IconProps, RecentProject, PivotReportState } from './types'; 
 import { DataContext, DataProvider } from './contexts/DataContext';
@@ -142,7 +144,7 @@ const AppContent: React.FC = () => {
     'welcome', 'dashboard', 'dataUpload', 'dataTable', 'visualizations', 'settings',
     'onlineConnectors', 'projectDetails', 'advancedAITools', 'pivotTable', 'about',
     'statisticalAnalysis', 'workflow', 'aiAssistant', 'diagrammingMatrix', 'routePlanner',
-    'workflowAutomation', 'aiDocument'
+    'workflowAutomation', 'aiDocument', 'dataCleaning'
   ];
 
   const noPaddingViews: ViewKey[] = ['welcome', 'diagrammingMatrix', 'routePlanner', 'workflowAutomation'];
@@ -205,6 +207,7 @@ const AppContent: React.FC = () => {
           <div style={{ display: activeView === 'dataTable' ? 'block' : 'none' }}><DataTableView onNavigate={handleViewChange} /></div>
           <div style={{ display: activeView === 'visualizations' ? 'block' : 'none' }}><VisualizationView /></div>
           <div style={{ display: activeView === 'settings' ? 'block' : 'none' }}><SettingsView /></div>
+          <div style={{ display: activeView === 'dataCleaning' ? 'block' : 'none' }}><DataCleaningView /></div>
           <div style={{ display: activeView === 'aiAssistant' ? 'block' : 'none', height: '100%' }}><AIAssistantView /></div>
           <div style={{ display: activeView === 'aiDocument' ? 'block' : 'none', height: '100%' }}><AiDocument /></div>
           <div style={{ display: activeView === 'onlineConnectors' ? 'block' : 'none' }}><OnlineConnectorsView /></div>

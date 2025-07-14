@@ -63,7 +63,8 @@ export type ViewKey =
   | 'diagrammingMatrix'
   | 'routePlanner'
   | 'workflowAutomation'
-  | 'aiDocument';
+  | 'aiDocument'
+  | 'dataCleaning';
 
 export interface NavSubMenuItemConfig {
     name: string;

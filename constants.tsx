@@ -1,6 +1,7 @@
 
 
 
+
 import React from 'react';
 import { 
     IconType, 
@@ -115,6 +116,14 @@ const DocumentIcon: IconType = ({ className }) => (
     </svg>
 );
 
+const DataCleaningIcon: IconType = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.25V3m0 15.25a2.25 2.25 0 00-2.25 2.25H6.75a2.25 2.25 0 000-4.5h3m3.75 0a2.25 2.25 0 012.25 2.25h2.25a2.25 2.25 0 010-4.5h-3m-3.75 0h-3.75m3.75 0V3m0 15.25L13.5 12l-1.5-1.5-1.5 1.5L9 18.25M9.75 6.75h4.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6.75h.008v.008H16.5V6.75zM7.5 6.75h.008v.008H7.5V6.75z" />
+    </svg>
+);
+
 
 export const CheckCircleIcon: IconType = ({ className }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -208,7 +217,7 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
     {
         name: "Tools",
         subItems: [
-            { name: "Data Cleaning", viewId: 'genericPlaceholder' }, 
+            { name: "Data Cleaning", viewId: 'dataCleaning' }, 
             { name: "Statistical Analysis", viewId: 'statisticalAnalysis' }, 
             { name: "AI Document Analysis", viewId: 'aiDocument' },
             { name: "Workflow Automator", viewId: 'workflowAutomation' },

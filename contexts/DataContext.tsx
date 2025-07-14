@@ -1,5 +1,6 @@
+
 import React, { createContext, useState, ReactNode } from 'react';
-import { TableData, FileHeaders, AppDisplayMode, PivotReportState, ChartState, initialChartState, DashboardWidget } from '../types';
+import { TableData, FileHeaders, AppDisplayMode, PivotReportState, ChartState, initialChartState, DashboardWidget, RecentProject } from '../types';
 
 interface DataContextType {
   tableData: TableData;
@@ -30,6 +31,10 @@ interface DataContextType {
   // State for DashboardView
   dashboardWidgets: DashboardWidget[];
   setDashboardWidgets: React.Dispatch<React.SetStateAction<DashboardWidget[]>>;
+
+  // State for Recent Projects
+  recentProjects: RecentProject[];
+  setRecentProjects: React.Dispatch<React.SetStateAction<RecentProject[]>>;
 }
 
 export const DataContext = createContext<DataContextType>({} as DataContextType);
@@ -49,11 +54,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   // Centralized state for views
   const [visualizationState, setVisualizationState] = useState({
     chart1: initialChartState,
-    chart2: { ...initialChartState, chartOptions: {...initialChartState.chartOptions, colorTheme: 'cosmicFunk'} }
+    chart2: { ...initialChartState, chartOptions: {...initialChartState.chartOptions, chartStyleId: 'cyberpunkNight'} }
   });
   const [pivotReports, setPivotReports] = useState<PivotReportState[]>([]);
   const [activePivotId, setActivePivotId] = useState<string | null>(null);
   const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidget[]>([]);
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
 
 
   return (
@@ -67,7 +73,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       visualizationState, setVisualizationState,
       pivotReports, setPivotReports,
       activePivotId, setActivePivotId,
-      dashboardWidgets, setDashboardWidgets
+      dashboardWidgets, setDashboardWidgets,
+      recentProjects, setRecentProjects
     }}>
       {children}
     </DataContext.Provider>

@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useContext, useMemo, useCallback, useEffect, useRef } from 'react';
 import { DataContext } from '../../contexts/DataContext';
 import { 
@@ -329,22 +332,32 @@ export const PivotTableView: React.FC = () => {
                             return (localDataMap.get(`${rPath.join('|')}#${cPath.join('|')}`) || []).map((values, vfIndex) => aggregate(values, newReport.config.valueFields[vfIndex].aggregator, isValueFieldTextual(newReport.config.valueFields[vfIndex].field, dataToUse)));
                         });
                     });
-                     // Simplified chart data for direct generation
+
                     let chartData: ChartDataItem[] | undefined;
                     if (uniqueFlatRowKeys.length > 0 && dataMatrix.length > 0 && newReport.config.valueFields.length > 0) {
-                       chartData = uniqueFlatRowKeys.map((rPath, rowIndex) => {
+                        chartData = uniqueFlatRowKeys.map((rPath, rowIndex) => {
                             const name = rPath.join(' / ') !== '_TOTAL_' ? rPath.join(' / ') : "Total";
                             const chartItem: ChartDataItem = { name };
                             uniqueFlatColKeys.forEach((cPath, cIndex) => {
-                                const val = dataMatrix[rowIndex]?.[cIndex]?.[0];
-                                if (isNumeric(val)) {
-                                    const colName = cPath.join(' / ');
-                                    const keyName = uniqueFlatColKeys.length === 1 && colName === '_TOTAL_' ? (newReport.config.valueFields[0].displayName || newReport.config.valueFields[0].field) : `${colName} - ${newReport.config.valueFields[0].displayName || newReport.config.valueFields[0].field}`;
-                                    chartItem[keyName] = Number(val);
-                                }
+                                const valuesInCell = dataMatrix[rowIndex]?.[cIndex] || [];
+                                const colName = cPath.join(' / ');
+                                newReport.config.valueFields.forEach((vfConfig, vfIndex) => {
+                                    const val = valuesInCell[vfIndex];
+                                    if (isNumeric(val)) {
+                                        const baseName = vfConfig.displayName || vfConfig.field;
+                                        const seriesName = (uniqueFlatColKeys.length === 1 && uniqueFlatColKeys[0].join('|') === '_TOTAL_') ? baseName : `${colName} - ${baseName}`;
+                                        chartItem[seriesName] = Number(val);
+                                    }
+                                });
                             });
                             return chartItem;
-                        }).filter(item => Object.keys(item).length > 1);
+                        }).filter(item => {
+                            const keys = Object.keys(item);
+                            if (keys.length <= 1) return false;
+                            if (item.name === "Total" && uniqueFlatRowKeys.length === 1 && keys.length > 1) return true;
+                            if (item.name === "Total") return false;
+                            return true;
+                        });
                     }
                     
                     const result: PivotResult = {
@@ -644,25 +657,29 @@ export const PivotTableView: React.FC = () => {
         
         let chartData: ChartDataItem[] | undefined;
         if (uniqueFlatRowKeys.length > 0 && dataMatrix.length > 0 && config.valueFields.length > 0) {
-            const firstValueFieldConfig = config.valueFields[0];
-            const firstValueFieldDisplayName = firstValueFieldConfig.displayName || firstValueFieldConfig.field;
-            const useRowLabel = uniqueFlatRowKeys[0].join('|') !== '_TOTAL_';
-
             chartData = uniqueFlatRowKeys.map((rPath, rowIndex) => {
-                const name = useRowLabel ? rPath.join(' / ') : "Total";
+                const name = rPath.join(' / ') !== '_TOTAL_' ? rPath.join(' / ') : "Total";
                 const chartItem: ChartDataItem = { name };
                 uniqueFlatColKeys.forEach((cPath, cIndex) => {
-                    const val = dataMatrix[rowIndex]?.[cIndex]?.[0]; 
-                    if (isNumeric(val)) { 
-                        const colName = cPath.join(' / ');
-                        const chartDataKey = (uniqueFlatColKeys.length === 1 && uniqueFlatColKeys[0].join('|') === '_TOTAL_') || uniqueFlatColKeys.length === 0 
-                                              ? firstValueFieldDisplayName 
-                                              : `${colName} - ${firstValueFieldDisplayName}`;
-                        chartItem[chartDataKey] = parseFloat(String(val).replace(/,/g, ''));
-                    }
+                    const valuesInCell = dataMatrix[rowIndex]?.[cIndex] || [];
+                    const colName = cPath.join(' / ');
+                    config.valueFields.forEach((vfConfig, vfIndex) => {
+                        const val = valuesInCell[vfIndex];
+                        if (isNumeric(val)) {
+                            const baseName = vfConfig.displayName || vfConfig.field;
+                            const seriesName = (uniqueFlatColKeys.length === 1 && uniqueFlatColKeys[0].join('|') === '_TOTAL_') ? baseName : `${colName} - ${baseName}`;
+                            chartItem[seriesName] = Number(val);
+                        }
+                    });
                 });
                 return chartItem;
-            }).filter(item => Object.keys(item).length > 1 && (useRowLabel ? item.name !== '_TOTAL_' : true) ); 
+            }).filter(item => {
+                const keys = Object.keys(item);
+                if (keys.length <= 1) return false;
+                if (item.name === "Total" && uniqueFlatRowKeys.length === 1 && keys.length > 1) return true;
+                if (item.name === "Total") return false;
+                return true;
+            });
         }
 
         const result: PivotResult = {
@@ -703,7 +720,9 @@ export const PivotTableView: React.FC = () => {
       if (target === 'valueFields') {
           const isText = isValueFieldTextual(selectedAvailableField, tableData);
           const defaultAggregator: AggregatorType = isText ? 'countNonEmpty' : 'sum';
-          newConfig.valueFields = [...newConfig.valueFields, { field: selectedAvailableField, aggregator: defaultAggregator, displayName: selectedAvailableField }];
+          const newFieldIndex = newConfig.valueFields.length;
+          const color = currentTheme.chartColors[newFieldIndex % currentTheme.chartColors.length];
+          newConfig.valueFields = [...newConfig.valueFields, { field: selectedAvailableField, aggregator: defaultAggregator, displayName: selectedAvailableField, color }];
       } else if (target === 'filters') {
           newConfig.filters = [...(newConfig.filters || []), { field: selectedAvailableField, selectedValues: [] }];
       } else {
@@ -999,73 +1018,58 @@ export const PivotTableView: React.FC = () => {
   };
   
   const renderPivotChart = () => {
-    if (!pivotResult) { 
-      return <p className="text-purple-300/70 text-center py-10">Chart will appear here after analysis.</p>;
-    }
-    if (!pivotResult.chartData || pivotResult.chartData.length === 0 || config.valueFields.length === 0) {
-      return <p className="text-purple-300/70 text-center py-10">No data available for chart.</p>;
+    if (!pivotResult || !pivotResult.chartData || pivotResult.chartData.length === 0 || config.valueFields.length === 0) {
+        return <p className="text-purple-300/70 text-center py-10">Chart will appear here after analysis.</p>;
     }
     const chartData = pivotResult.chartData;
     const dataKeys = Object.keys(chartData[0] || {}).filter(key => key !== 'name' && isNumeric(chartData[0][key]));
-    if (dataKeys.length === 0 && !['pie', 'donut'].includes(uiSettings.chartType)) { 
-        return <p className="text-purple-300/70 text-center py-10">Chart data is missing value series.</p>;
+    if (dataKeys.length === 0) {
+        return <p className="text-purple-300/70 text-center py-10">Chart data is missing numeric value series.</p>;
     }
+
     const chartTooltip = <Tooltip {...chartTooltipProps} />;
     const chartLegend = <Legend wrapperStyle={{fontSize: "12px"}}/>;
-    const chartColors = currentTheme.chartColors;
+    
+    const yFieldsWithColors = dataKeys.map((key, index) => {
+        // Sort value fields by name length descending to avoid substring matching issues
+        const sortedValueFields = [...config.valueFields].sort((a,b) => (b.displayName || b.field).length - (a.displayName || a.field).length);
+        const matchingVf = sortedValueFields.find(vf => {
+            const nameToMatch = vf.displayName || vf.field;
+            // Check for exact match or if the key ends with " - nameToMatch" for grouped series
+            return key === nameToMatch || key.endsWith(` - ${nameToMatch}`);
+        });
+        
+        return {
+            key,
+            color: matchingVf?.color || currentTheme.chartColors[index % currentTheme.chartColors.length]
+        };
+    });
+
     const chartMargin = { top: 20, right: 30, left: 20, bottom: 60 };
-    const tickFormatter = (tick: any) => {
-        const limit = 20; // char limit
-        if (tick && typeof tick === 'string' && tick.length > limit) {
-            return `${tick.substring(0, limit)}...`;
-        }
-        return tick;
-    };
+    const tickFormatter = (tick: any) => tick && typeof tick === 'string' && tick.length > 20 ? `${tick.substring(0, 20)}...` : tick;
 
     switch(uiSettings.chartType) {
         case 'bar': 
-            return <BarChart data={chartData} margin={chartMargin}><CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} /><XAxis dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" /><YAxis stroke="#a855f7" tick={{ fontSize: 11 }} />{chartTooltip}{chartLegend}{dataKeys.map((key, index) => (<Bar key={key} dataKey={key} fill={chartColors[index % chartColors.length]} name={key.replace(/_/g, ' ')} radius={[4, 4, 0, 0]} />))}</BarChart>;
+            return <BarChart data={chartData} margin={chartMargin}><CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} /><XAxis dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" /><YAxis stroke="#a855f7" tick={{ fontSize: 11 }} />{chartTooltip}{chartLegend}{yFieldsWithColors.map(({key, color}) => (<Bar key={key} dataKey={key} fill={color} name={key.replace(/_/g, ' ')} radius={[4, 4, 0, 0]} />))}</BarChart>;
         case 'line': 
-            return <LineChart data={chartData} margin={chartMargin}><CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} /><XAxis dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" /><YAxis stroke="#a855f7" tick={{ fontSize: 11 }} />{chartTooltip}{chartLegend}{dataKeys.map((key, index) => (<Line key={key} type="monotone" dataKey={key} stroke={chartColors[index % chartColors.length]} name={key.replace(/_/g, ' ')} activeDot={{ r: 6, strokeWidth: 2, fill: chartColors[index % chartColors.length] }} dot={{r:3}} strokeWidth={2} />))}</LineChart>;
+            return <LineChart data={chartData} margin={chartMargin}><CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} /><XAxis dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" /><YAxis stroke="#a855f7" tick={{ fontSize: 11 }} />{chartTooltip}{chartLegend}{yFieldsWithColors.map(({key, color}) => (<Line key={key} type="monotone" dataKey={key} stroke={color} name={key.replace(/_/g, ' ')} activeDot={{ r: 6, strokeWidth: 2, fill: color }} dot={{r:3}} strokeWidth={2} />))}</LineChart>;
         case 'area':
-            return <AreaChart data={chartData} margin={chartMargin}><CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} /><XAxis dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" /><YAxis stroke="#a855f7" tick={{ fontSize: 11 }} />{chartTooltip}{chartLegend}{dataKeys.map((key, index) => (<Area key={key} type="monotone" dataKey={key} stroke={chartColors[index % chartColors.length]} fill={chartColors[index % chartColors.length]} fillOpacity={0.6} name={key.replace(/_/g, ' ')} />))}</AreaChart>;
-        case 'pie':
-            if (dataKeys.length === 0) return <p className="text-purple-300/70 text-center py-10">Pie chart requires value series.</p>;
-            const pieChartData = chartData.map(item => ({ name: item.name, value: item[dataKeys[0]] as number })).filter(item => isNumeric(item.value)); 
-            if (pieChartData.length === 0) return <p className="text-purple-300/70 text-center py-10">No valid data for pie chart.</p>;
-            return <PieChart><Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`} >{pieChartData.map((_entry, index) => ( <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} stroke={chartColors[index % chartColors.length]} />))}</Pie>{chartTooltip}{chartLegend}</PieChart>;
-        case 'donut':
-            if (dataKeys.length === 0) return <p className="text-purple-300/70 text-center py-10">Donut chart requires value series.</p>;
-            const donutChartData = chartData.map(item => ({ name: item.name, value: item[dataKeys[0]] as number })).filter(item => isNumeric(item.value));
-            if (donutChartData.length === 0) return <p className="text-purple-300/70 text-center py-10">No valid data for donut chart.</p>;
-            return <PieChart><Pie data={donutChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={100} labelLine={false} label={({ percent }) => `${(percent * 100).toFixed(0)}%`}>{donutChartData.map((_entry, index) => (<Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} stroke={chartColors[index % chartColors.length]} />))}</Pie>{chartTooltip}{chartLegend}</PieChart>;
+            return <AreaChart data={chartData} margin={chartMargin}><CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} /><XAxis dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" /><YAxis stroke="#a855f7" tick={{ fontSize: 11 }} />{chartTooltip}{chartLegend}{yFieldsWithColors.map(({key, color}) => (<Area key={key} type="monotone" dataKey={key} stroke={color} fill={color} fillOpacity={0.6} name={key.replace(/_/g, ' ')} />))}</AreaChart>;
+        case 'pie': case 'donut':
+            if (yFieldsWithColors.length === 0) return <p className="text-purple-300/70 text-center py-10">Pie/Donut chart requires value series.</p>;
+            const chartValueKey = yFieldsWithColors[0].key;
+            const chartDataForPie = chartData.map(item => ({ name: item.name, value: item[chartValueKey] as number })).filter(item => isNumeric(item.value)); 
+            if (chartDataForPie.length === 0) return <p className="text-purple-300/70 text-center py-10">No valid data for chart.</p>;
+            return <PieChart><Pie data={chartDataForPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={uiSettings.chartType === 'pie' ? 100 : 110} innerRadius={uiSettings.chartType === 'donut' ? 60 : 0} labelLine={false} label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`} >{chartDataForPie.map((_entry, index) => ( <Cell key={`cell-${index}`} fill={currentTheme.chartColors[index % currentTheme.chartColors.length]} />))}</Pie>{chartTooltip}{chartLegend}</PieChart>;
         case 'horizontalBar':
-            return <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} /><XAxis type="number" stroke="#a855f7" tick={{ fontSize: 11 }} /><YAxis type="category" dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} width={120} interval={0} tickFormatter={tickFormatter} />{chartTooltip}{chartLegend}{dataKeys.map((key, index) => (<Bar key={key} dataKey={key} fill={chartColors[index % chartColors.length]} name={key.replace(/_/g, ' ')} radius={[0, 4, 4, 0]} />))}</BarChart>;
+            return <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} /><XAxis type="number" stroke="#a855f7" tick={{ fontSize: 11 }} /><YAxis type="category" dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} width={120} interval={0} tickFormatter={tickFormatter} />{chartTooltip}{chartLegend}{yFieldsWithColors.map(({key, color}) => (<Bar key={key} dataKey={key} fill={color} name={key.replace(/_/g, ' ')} radius={[0, 4, 4, 0]} />))}</BarChart>;
         case 'butterfly':
-            if (dataKeys.length < 2) {
-                return <p className="text-purple-300/70 text-center py-10">Butterfly chart requires at least two value series to compare.</p>;
-            }
-            const key1 = dataKeys[0];
-            const key2 = dataKeys[1];
-            const butterflyData = chartData.map(item => ({
-                name: item.name,
-                [key1]: -Math.abs(item[key1] as number || 0),
-                [key2]: Math.abs(item[key2] as number || 0)
-            }));
+            if (yFieldsWithColors.length < 2) return <p className="text-purple-300/70 text-center py-10">Butterfly chart requires at least two value series.</p>;
+            const key1 = yFieldsWithColors[0].key; const key2 = yFieldsWithColors[1].key;
+            const butterflyData = chartData.map(item => ({ name: item.name, [key1]: -Math.abs(item[key1] as number || 0), [key2]: Math.abs(item[key2] as number || 0) }));
             const maxVal = Math.ceil(Math.max(...chartData.map(d => Math.max(Math.abs(d[key1] as number || 0), Math.abs(d[key2] as number || 0)))));
-            const butterflyTooltip = <Tooltip
-                {...chartTooltipProps}
-                formatter={(value: number) => [Math.abs(value).toLocaleString()]}
-            />;
-            return <BarChart data={butterflyData} layout="vertical" barCategoryGap={0} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} />
-                <XAxis type="number" domain={[-maxVal, maxVal]} tickFormatter={(value) => `${Math.abs(value)}`} stroke="#a855f7" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} width={120} axisLine={false} tickLine={false} interval={0} tickFormatter={tickFormatter} />
-                {butterflyTooltip}
-                {chartLegend}
-                <Bar dataKey={key1} name={key1.replace(/_/g, ' ')} fill={chartColors[0]} radius={[0, 4, 4, 0]} />
-                <Bar dataKey={key2} name={key2.replace(/_/g, ' ')} fill={chartColors[1]} radius={[4, 0, 0, 4]} />
-            </BarChart>;
+            const butterflyTooltip = <Tooltip {...chartTooltipProps} formatter={(value: number) => [Math.abs(value).toLocaleString()]} />;
+            return <BarChart data={butterflyData} layout="vertical" barCategoryGap={0} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" stroke="#4A044E" strokeOpacity={0.3} /><XAxis type="number" domain={[-maxVal, maxVal]} tickFormatter={(value) => `${Math.abs(value)}`} stroke="#a855f7" tick={{ fontSize: 11 }} /><YAxis type="category" dataKey="name" stroke="#a855f7" tick={{ fontSize: 10 }} width={120} axisLine={false} tickLine={false} interval={0} tickFormatter={tickFormatter} />{butterflyTooltip}{chartLegend}<Bar dataKey={key1} name={key1.replace(/_/g, ' ')} fill={yFieldsWithColors[0].color} radius={[0, 4, 4, 0]} /><Bar dataKey={key2} name={key2.replace(/_/g, ' ')} fill={yFieldsWithColors[1].color} radius={[4, 0, 0, 4]} /></BarChart>;
         default: return null;
     }
   };

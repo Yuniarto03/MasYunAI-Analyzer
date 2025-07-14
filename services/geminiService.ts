@@ -1,632 +1,332 @@
-// This file is a placeholder for more complex Gemini API interactions.
-// For the current chat functionality, the logic is within AIChat.tsx for simplicity.
-// If more features use Gemini (e.g., data analysis insights), centralize API calls here.
 
-import { GoogleGenAI, GenerateContentResponse, GenerateContentParameters } from '@google/genai';
-import { MODEL_TEXT } from '../constants';
-import { marked } from 'marked'; // Using a proper markdown parser for safety and features
-import { LatLngTuple, TravelMode } from '../types';
-import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker for Vercel deployment
-if (typeof window !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+import { GoogleGenAI, GenerateContentResponse, Part, Type } from '@google/genai';
+import { marked } from 'marked';
+import { DiagramNode, DiagramEdge, RouteResult, ChatMessage, AiOutputTypeHint, AiDocumentResponse, CombinedAiOutput, TableRow } from '../types';
+import { MODEL_TEXT, MODEL_IMAGE } from '../constants';
+
+let ai: GoogleGenAI;
+
+const getAI = () => {
+    if (!ai) {
+        if (!process.env.API_KEY) {
+            throw new Error("API_KEY environment variable not set.");
+        }
+        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    }
+    return ai;
+};
+
+// --- START: AI Assistant Content Generation ---
+
+const contentGenerationSystemInstruction = `You are a multi-functional AI assistant for "MasYun Data Analyzer".
+Your primary goal is to respond with structured JSON when the user asks to create content that can be downloaded as a file (DOCX, PPTX, XLSX, PDF). For all other conversational queries or analyses that should be displayed in chat, respond with Markdown.
+
+**JSON Structure for File Generation:**
+When a user prompt implies file creation (e.g., "create a presentation about...", "make a table of...", "write a document on..."), you MUST respond with ONLY a valid JSON object with the following structure:
+{
+  "type": "file_generation",
+  "format": "pptx" | "docx" | "table" | "pdf_table",
+  "content": ...
 }
 
-let ai: GoogleGenAI | null = null;
+- For "pptx": \`content\` is an array of slide objects: \`[{ title: "string", bullets: ["string", ...] }, ...]\`.
+- For "docx": \`content\` is an array of paragraph objects: \`[{ type: "heading" | "paragraph", text: "string" }, ...]\`.
+- For "table" (for XLSX/CSV): \`content\` is an array of row objects, where keys are headers: \`[{ "Header 1": "value", "Header 2": "value" }, ...]\`.
+- For "pdf_table": \`content\` is an object: \`{ "headers": ["Header 1", ...], "rows": [["cell1", "cell2", ...], ...] }\`.
 
-const getClient = (): GoogleGenAI => {
-  const apiKey = process.env.API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("API_KEY environment variable is not set.");
-  }
-  if (!ai) {
-    ai = new GoogleGenAI({ apiKey });
-  }
-  return ai;
-};
+**Image Generation:**
+If the user prompt is clearly asking to "draw", "generate an image of", "create a picture of", or similar, respond with a JSON object:
+{
+  "type": "image_generation",
+  "prompt": "The user's original image prompt string here"
+}
 
-// PDF Text Extraction Function
-export const extractTextFromPDF = async (file: File): Promise<string> => {
-    try {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        let fullText = '';
-        
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items
-                .map((item: any) => item.str)
-                .join(' ');
-            fullText += pageText + '\n\n';
-        }
-        
-        return fullText.trim();
-    } catch (error) {
-        console.error('Error extracting PDF text:', error);
-        throw new Error('Failed to extract text from PDF. The file might be corrupted or password-protected.');
-    }
-};
+**Chat/Markdown Response:**
+For any other request (e.g., "summarize this file", "explain this concept", "what are the key takeaways?"), respond directly with your answer in well-formatted MARKDOWN. DO NOT wrap your markdown response in JSON.`;
 
-// Quantum AI Response Generator
-export const generateQuantumAIResponse = async (
-    prompt: string,
-    quantumMode: string,
-    files: { name: string; mimeType: string; data: string }[]
-): Promise<MultiFunctionalResponse> => {
-    const client = getClient();
-    
-    const quantumInstructions = {
-        'creative': `You are operating in Quantum Creative Synthesis Mode. Think beyond conventional boundaries, combine disparate concepts innovatively, and generate truly original solutions. Use lateral thinking, analogical reasoning, and creative synthesis to produce breakthrough ideas.`,
-        'analytical': `You are operating in Quantum Deep Analysis Mode. Perform multi-dimensional analysis with unprecedented depth. Examine patterns, correlations, causations, and hidden relationships. Provide insights that go beyond surface-level observations.`,
-        'strategic': `You are operating in Quantum Strategic Planning Mode. Think like a master strategist with access to multiple timelines and scenarios. Consider long-term implications, strategic positioning, risk assessment, and opportunity identification across multiple dimensions.`,
-        'research': `You are operating in Quantum Research Mode. Access and synthesize information with academic rigor and scientific precision. Provide comprehensive, well-sourced analysis with multiple perspectives and evidence-based conclusions.`,
-        'problem-solving': `You are operating in Quantum Problem Solver Mode. Decompose complex problems into manageable components, identify root causes, generate multiple solution pathways, and provide step-by-step implementation strategies.`,
-        'predictive': `You are operating in Quantum Predictive Analysis Mode. Analyze trends, patterns, and data to make informed predictions about future scenarios. Consider multiple variables, potential disruptions, and probabilistic outcomes.`
-    };
-    
-    const systemInstruction = `${quantumInstructions[quantumMode] || quantumInstructions['analytical']}
 
-You are an advanced AI with quantum-level processing capabilities within the MasYun Data Analyzer platform. Your responses should demonstrate:
-- Multi-dimensional thinking and analysis
-- Advanced pattern recognition
-- Innovative problem-solving approaches
-- Comprehensive understanding of complex relationships
-- Forward-thinking and strategic insights
-
-When asked to create files, format your entire response as raw content with [DL_FILENAME: filename.ext] on the first line if downloadable.`;
-    
-    const contents: any[] = [];
-    if(prompt) contents.push({ text: `[QUANTUM ${quantumMode.toUpperCase()} MODE] ${prompt}` });
-
-    files.forEach(file => {
-        contents.push({ text: `[User has included the file '${file.name}' for quantum analysis]` });
-        contents.push({
-            inlineData: {
-                mimeType: file.mimeType,
-                data: file.data,
-            }
-        });
+export const generateImageWithGemini = async (prompt: string): Promise<string> => {
+    const genAI = getAI();
+    const response = await genAI.models.generateImages({
+        model: MODEL_IMAGE,
+        prompt: prompt,
+        config: {
+            numberOfImages: 1,
+            outputMimeType: 'image/jpeg',
+        },
     });
-
-    try {
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: { parts: contents },
-            config: {
-                systemInstruction,
-                temperature: quantumMode === 'creative' ? 0.9 : 0.7,
-                topP: 0.95,
-                topK: 40,
-            }
-        });
-
-        let text = response.text;
-        const firstLineBreak = text.indexOf('\n');
-        const firstLine = firstLineBreak === -1 ? text : text.substring(0, firstLineBreak);
-
-        const dlRegex = /\[DL_FILENAME:\s*(.*?)\s*\]/;
-        const match = firstLine.match(dlRegex);
-
-        if (match && match[1]) {
-            const filename = match[1].trim();
-            const content = firstLineBreak === -1 ? '' : text.substring(firstLineBreak + 1);
-            
-            // Basic mime type detection from filename extension
-            const ext = filename.split('.').pop()?.toLowerCase() || '';
-            let mimeType = 'application/octet-stream';
-            if (ext === 'txt') mimeType = 'text/plain';
-            else if (ext === 'csv') mimeType = 'text/csv';
-            else if (ext === 'json') mimeType = 'application/json';
-            else if (ext === 'html') mimeType = 'text/html';
-            else if (ext === 'xml') mimeType = 'application/xml';
-            else if (ext === 'py') mimeType = 'text/x-python';
-            else if (ext === 'js') mimeType = 'application/javascript';
-            else if (ext === 'md') mimeType = 'text/markdown';
-            
-            return {
-                isDownloadable: true,
-                content: content,
-                filename: filename,
-                mimeType: mimeType
-            };
-        } else {
-            return {
-                isDownloadable: false,
-                content: text,
-                filename: '',
-                mimeType: ''
-            };
-        }
-    } catch (error) {
-        console.error('Error generating quantum AI response from Gemini:', error);
-        if (error instanceof Error) {
-            return {
-                isDownloadable: false,
-                content: `**Quantum AI Error:**\n\n> ${error.message}`,
-                filename: '',
-                mimeType: '',
-            };
-        }
-        return {
-            isDownloadable: false,
-            content: '**An unknown quantum AI error occurred.**',
-            filename: '',
-            mimeType: '',
-        };
+    if (response.generatedImages && response.generatedImages.length > 0) {
+        return response.generatedImages[0].image.imageBytes;
     }
+    throw new Error("Image generation failed or returned no images.");
 };
-
-// Generic command function for AI text generation
-export const generateAICommand = async (prompt: string): Promise<string> => {
-  try {
-    const client = getClient();
-    const params: GenerateContentParameters = {
-      model: MODEL_TEXT,
-      contents: prompt,
-      // config: { // Optional: add specific config if needed
-      //   temperature: 0.7,
-      // }
-    };
-    const response: GenerateContentResponse = await client.models.generateContent(params);
-    return response.text;
-  } catch (error) {
-    console.error('Error generating text from Gemini:', error);
-    throw error; // Re-throw for handling in UI
-  }
-};
-
-export interface MultiFunctionalResponse {
-    isDownloadable: boolean;
-    content: string;
-    filename: string;
-    mimeType: string;
-}
 
 export const generateMultiFunctionalResponse = async (
-    prompt: string, 
+    prompt: string,
     files: { name: string; mimeType: string; data: string }[]
-): Promise<MultiFunctionalResponse> => {
-    const client = getClient();
-    const systemInstruction = `You are a highly intelligent, multi-functional AI assistant within the MasYun Data Analyzer platform. You can analyze data, answer complex questions, generate code, write documents, and create file content based on user requests. You have advanced capabilities for processing PDFs, images, and various file formats.
-    
-    When asked to create a file, format your entire response as a raw string containing ONLY the file's content. To specify the filename and type for download, you MUST place a directive on the very first line of your response in the format: [DL_FILENAME: a_good_filename.ext]. If you are just answering a question, do not include the DL_FILENAME directive.
-    
-    You can perform web searches for current information and provide comprehensive analysis of uploaded documents.`;
-    
-    const contents: any[] = [];
-    if(prompt) contents.push({ text: prompt });
+): Promise<Partial<ChatMessage>> => {
+    const genAI = getAI();
+    const parts: Part[] = [];
 
     files.forEach(file => {
-        contents.push({ text: `[User has included the file '${file.name}' for analysis]` });
-        contents.push({
+        parts.push({
             inlineData: {
                 mimeType: file.mimeType,
                 data: file.data,
             }
         });
     });
-
-    try {
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: { parts: contents },
-            config: {
-                systemInstruction,
-                temperature: 0.7,
-                topP: 0.9,
-            }
-        });
-
-        let text = response.text;
-        const firstLineBreak = text.indexOf('\n');
-        const firstLine = firstLineBreak === -1 ? text : text.substring(0, firstLineBreak);
-
-        const dlRegex = /\[DL_FILENAME:\s*(.*?)\s*\]/;
-        const match = firstLine.match(dlRegex);
-
-        if (match && match[1]) {
-            const filename = match[1].trim();
-            const content = firstLineBreak === -1 ? '' : text.substring(firstLineBreak + 1);
-            
-            // Basic mime type detection from filename extension
-            const ext = filename.split('.').pop()?.toLowerCase() || '';
-            let mimeType = 'application/octet-stream';
-            if (ext === 'txt') mimeType = 'text/plain';
-            else if (ext === 'csv') mimeType = 'text/csv';
-            else if (ext === 'json') mimeType = 'application/json';
-            else if (ext === 'html') mimeType = 'text/html';
-            else if (ext === 'xml') mimeType = 'application/xml';
-            else if (ext === 'py') mimeType = 'text/x-python';
-            else if (ext === 'js') mimeType = 'application/javascript';
-            else if (ext === 'md') mimeType = 'text/markdown';
-            
-            return {
-                isDownloadable: true,
-                content: content,
-                filename: filename,
-                mimeType: mimeType
-            };
-        } else {
-            return {
-                isDownloadable: false,
-                content: text,
-                filename: '',
-                mimeType: ''
-            };
-        }
-    } catch (error) {
-        console.error('Error generating multi-functional response from Gemini:', error);
-        if (error instanceof Error) {
-            return {
-                isDownloadable: false,
-                content: `**AI Error:**\n\n> ${error.message}`,
-                filename: '',
-                mimeType: '',
-            };
-        }
-        return {
-            isDownloadable: false,
-            content: '**An unknown AI error occurred.**',
-            filename: '',
-            mimeType: '',
-        };
-    }
-};
-
-
-export const analyzeSelectedData = async (jsonData: string): Promise<string> => {
-    const prompt = `
-        You are an expert data analyst. Below is a JSON array of data representing a selection of rows from a larger dataset.
-        Your task is to provide a concise summary of this specific data subset. 
-        Focus on:
-        1.  Key characteristics of the selected data.
-        2.  Any obvious trends, patterns, or correlations you can spot within this selection.
-        3.  Potential outliers or anomalies that stand out.
-        
-        Keep your analysis brief and to the point. Use markdown for formatting if needed (e.g., bullet points).
-
-        Data Subset:
-        ${jsonData}
-    `;
-
-    try {
-        const client = getClient();
-        const response: GenerateContentResponse = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-        });
-        return response.text;
-    } catch (error) {
-        console.error('Error analyzing data with Gemini:', error);
-        if (error instanceof Error) {
-            return `Error during analysis: ${error.message}`;
-        }
-        return 'An unknown error occurred during AI analysis.';
-    }
-};
-
-export const getStatisticalAnalysis = async (profilingSummary: string, userQuery?: string, isSubset: boolean = false): Promise<string> => {
-    const systemInstruction = `You are a world-class statistician and data analyst integrated into the 'MasYun Data Analyzer' platform. Your responses must be clear, concise, and insightful. Use markdown for formatting, including tables, lists, and code blocks where appropriate.`;
-
-    let prompt = `
-        I have performed a statistical analysis on a dataset. Here is the summary of the data profile:
-        ---
-        ${profilingSummary}
-        ---
-    `;
-
-    if (userQuery) {
-        prompt += `
-            Based on this data profile, please answer the following question: "${userQuery}"
-            Provide a detailed answer, referencing the provided statistics. If the query asks for something not directly available in the summary (like correlation between two specific variables), explain what additional calculations would be needed, but still provide an educated hypothesis based on the data you do have.
-        `;
-    } else { // This is the "Auto Analyze" case
-        const datasetContext = isSubset ? 'this data subset' : 'the entire dataset';
-        prompt += `
-            Based on this data profile, please provide a high-level automated analysis of ${datasetContext}. Your analysis should cover:
-            1.  **Overall Summary & Key Findings**: A brief, executive-level summary of the most important characteristics of the data.
-            2.  **Potential Data Quality Issues**: Point out any variables with a high number of missing values, potential outliers suggested by min/max/std dev, or low variance.
-            3.  **Interesting Correlations or Relationships (Hypotheses)**: Based on the variable types and distributions, suggest potential relationships that would be interesting to investigate further (e.g., "The wide distribution in 'Sales' might be correlated with the 'Region' category. A deeper analysis could confirm this.").
-            4.  **Suggestions for Next Steps**: Recommend what a data analyst might want to do next (e.g., "Create a scatter plot of 'Age' vs. 'Income' to explore their relationship," or "Normalize the 'TransactionAmount' column before using it in a machine learning model.").
-        `;
-    }
-
-    try {
-        const client = getClient();
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: prompt,
-            config: {
-                systemInstruction: systemInstruction,
-                temperature: 0.5, // Keep it more factual for analysis
-            }
-        });
-
-        // Parse markdown to HTML for safe rendering.
-        const rawText = response.text;
-        const html = marked.parse(rawText);
-        return html;
-
-    } catch (error) {
-        console.error('Error getting statistical analysis from Gemini:', error);
-        if (error instanceof Error) {
-            return `<h3>AI Analysis Error</h3><p>An error occurred while communicating with the AI: ${error.message}</p>`;
-        }
-        return '<h3>AI Analysis Error</h3><p>An unknown error occurred during AI analysis.</p>';
-    }
-};
-
-
-export const generateDocumentation = async (featuresPrompt: string): Promise<string> => {
-    const fullPrompt = `
-        You are an expert technical writer. Your task is to generate a complete, well-structured, and user-friendly documentation in a single HTML file.
-        The application is named "MasYun Data Analyzer".
-        The HTML should be self-contained with modern CSS for styling. Use a clean, dark theme with a futuristic/holographic aesthetic that would fit a data analysis application with a space theme.
-        The documentation should be comprehensive, covering all features listed below. Structure it with a clear table of contents, sections, and subsections.
-        Explain what each feature does, how to use it, and any key benefits. Use a professional but accessible tone.
-        
-        Here are the features of the application to document:
-        ---
-        ${featuresPrompt}
-        ---
-        
-        Ensure the final output is ONLY the HTML code, starting with <!DOCTYPE html> and ending with </html>. Do not include any explanatory text before or after the HTML block.
-        The HTML should include styles for typography, links, code blocks, tables, and callouts (like notes or tips).
-        The color palette should revolve around deep blues, purples, cyans, and magentas, consistent with a "holographic" or "nebula" theme.
-    `;
-
-    try {
-        const client = getClient();
-        const response: GenerateContentResponse = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: fullPrompt,
-            config: {
-                // Higher temperature for more creative/descriptive writing
-                temperature: 0.8,
-            }
-        });
-        let htmlContent = response.text;
-
-        // Clean up the response to ensure it's just HTML
-        const htmlStartIndex = htmlContent.toLowerCase().indexOf('<!doctype html>');
-        if (htmlStartIndex > -1) {
-            htmlContent = htmlContent.substring(htmlStartIndex);
-        }
-        const htmlEndIndex = htmlContent.toLowerCase().lastIndexOf('</html>');
-        if (htmlEndIndex > -1) {
-            htmlContent = htmlContent.substring(0, htmlEndIndex + 7);
-        }
-        // Also remove markdown fences if they exist
-        htmlContent = htmlContent.replace(/^```html\s*/, '').replace(/\s*```$/, '');
-
-        return htmlContent;
-    } catch (error) {
-        console.error('Error generating documentation with Gemini:', error);
-        if (error instanceof Error) {
-            return `<h1>Error during documentation generation</h1><p>${error.message}</p>`;
-        }
-        return '<h1>An unknown error occurred during AI analysis.</h1>';
-    }
-};
-
-export const generateDiagramFromPrompt = async (prompt: string): Promise<{ nodes: any[], edges: any[] }> => {
-    const client = getClient();
-    const systemInstruction = `You are a creative diagram designer. Your task is to generate a JSON object representing a visually appealing diagram from text. The JSON object must have "nodes" and "edges".
-
-- "nodes" is an array. Each node must have:
-  - "id": A unique string (e.g., "node-1").
-  - "type": "rectangle", "ellipse", "diamond", or "image".
-  - "position": An object with "x" and "y" numbers. Arrange nodes logically.
-  - "size": An object with "width" and "height".
-  - "data": An object with:
-    - "label": The text inside the node.
-    - "style": An object. CRITICAL: For each node, assign a unique and vibrant \`backgroundColor\` and a contrasting \`borderColor\` from a futuristic palette (e.g., #0e182d, #1f2937 for backgrounds; #3b82f6, #8b5cf6, #10b981, #06b6d4, #eab308 for borders). Also set \`color\` for the text to be readable (e.g., #e5e7eb). If the user asks for an icon, include an "icon" property with a keyword (e.g., "database", "cloud").
-
-- "edges" is an array. Each edge must have:
-  - "id": A unique string (e.g., "edge-1").
-  - "source": The source node "id".
-  - "target": The target node "id".
-  - "label": An optional label string.
-
-Respond ONLY with the perfectly valid JSON object. Do not include any other text or markdown fences.
-
-Example User Prompt: "Create a workflow for a web server. Start with a 'Client Request', which goes to a 'Load Balancer'. The load balancer then sends traffic to one of two 'Web Server' nodes, which both connect to a 'Database' node with a database icon."
-
-Example JSON Response:
-{
-  "nodes": [
-    { "id": "node-1", "type": "ellipse", "position": { "x": 325, "y": 50 }, "size": { "width": 150, "height": 50 }, "data": { "label": "Client Request", "style": { "backgroundColor": "#1f2937", "borderColor": "#3b82f6", "color": "#e5e7eb" } } },
-    { "id": "node-2", "type": "rectangle", "position": { "x": 325, "y": 150 }, "size": { "width": 150, "height": 75 }, "data": { "label": "Load Balancer", "style": { "backgroundColor": "#1f2937", "borderColor": "#10b981", "color": "#e5e7eb" } } },
-    { "id": "node-3", "type": "rectangle", "position": { "x": 200, "y": 275 }, "size": { "width": 150, "height": 75 }, "data": { "label": "Web Server 1", "style": { "backgroundColor": "#0e182d", "borderColor": "#06b6d4", "color": "#e5e7eb" } } },
-    { "id": "node-4", "type": "rectangle", "position": { "x": 450, "y": 275 }, "size": { "width": 150, "height": 75 }, "data": { "label": "Web Server 2", "style": { "backgroundColor": "#0e182d", "borderColor": "#06b6d4", "color": "#e5e7eb" } } },
-    { "id": "node-5", "type": "rectangle", "position": { "x": 325, "y": 425 }, "size": { "width": 150, "height": 75 }, "data": { "label": "Database", "style": { "icon": "database", "backgroundColor": "#1f2937", "borderColor": "#eab308", "color": "#e5e7eb" } } }
-  ],
-  "edges": [
-    { "id": "edge-1", "source": "node-1", "target": "node-2" },
-    { "id": "edge-2", "source": "node-2", "target": "node-3" },
-    { "id": "edge-3", "source": "node-2", "target": "node-4" },
-    { "id": "edge-4", "source": "node-3", "target": "node-5" },
-    { "id": "edge-5", "source": "node-4", "target": "node-5" }
-  ]
-}
-`;
-
-    const response = await client.models.generateContent({
+    parts.push({ text: prompt });
+    
+    const response = await genAI.models.generateContent({
         model: MODEL_TEXT,
-        contents: prompt,
-        config: {
-            systemInstruction,
-            responseMimeType: "application/json",
-            temperature: 0.2, // Lower temperature for more predictable, structured output
+        contents: { parts },
+        config: { systemInstruction: contentGenerationSystemInstruction },
+    });
+    
+    const responseText = response.text;
+
+    try {
+        const parsedJson = JSON.parse(responseText);
+        if (parsedJson.type === 'file_generation') {
+            const downloadOptions: ChatMessage['downloadOptions'] = [];
+            const { format } = parsedJson;
+            if (format === 'table') {
+                downloadOptions.push({ format: 'xlsx', label: 'Download XLSX' });
+            } else if (format === 'pptx') {
+                downloadOptions.push({ format: 'pptx', label: 'Download PPTX' });
+            } else if (format === 'docx') {
+                downloadOptions.push({ format: 'docx', label: 'Download DOCX' });
+            } else if (format === 'pdf_table') {
+                downloadOptions.push({ format: 'pdf', label: 'Download PDF' });
+            }
+
+            return {
+                text: `I have generated content in the requested format. You can download it now.`,
+                isDownloadable: true,
+                downloadOptions,
+                rawContent: parsedJson.content,
+            };
         }
+        if(parsedJson.type === 'image_generation' && parsedJson.prompt) {
+            const imageBytes = await generateImageWithGemini(parsedJson.prompt);
+            return {
+                text: `Generated image for: *${parsedJson.prompt}*`,
+                isDownloadable: true,
+                downloadOptions: [{ format: 'image', label: 'Download Image' }],
+                rawContent: imageBytes,
+                imageUrl: `data:image/jpeg;base64,${imageBytes}`
+            }
+        }
+    } catch (e) {
+        // Not JSON, so it's a regular markdown response
+        return { text: responseText };
+    }
+
+    // Fallback for unexpected JSON structure
+    return { text: responseText };
+};
+
+
+// --- END: AI Assistant Content Generation ---
+
+// --- START: AI Document Analysis ---
+export const analyzeDocument = async (instruction: string, file?: File, outputTypeHint: AiOutputTypeHint = 'text'): Promise<AiDocumentResponse> => {
+    const genAI = getAI();
+    const parts: Part[] = [];
+
+    if (file) {
+        const base64data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+        parts.push({ inlineData: { mimeType: file.type, data: base64data } });
+    }
+
+    parts.push({ text: instruction });
+
+    const response = await genAI.models.generateContent({
+        model: MODEL_TEXT,
+        contents: { parts },
+        config: {
+            // A more generic system instruction for this view
+            systemInstruction: `You are an AI assistant skilled in document analysis and content generation. The user has provided an instruction and may have uploaded a file. Follow the instruction and generate the output in the format hinted by the user. Hint: ${outputTypeHint}`,
+        },
     });
 
-    let jsonStr = response.text.trim();
-    
-    // The model might return the JSON inside markdown fences, with leading/trailing text.
-    // This logic attempts to extract the core JSON object.
-    const fenceRegex = /```(?:json)?\s*({[\s\S]*?})\s*```/s;
-    const fenceMatch = jsonStr.match(fenceRegex);
-    
-    if (fenceMatch && fenceMatch[1]) {
-        jsonStr = fenceMatch[1];
-    } else {
-        const firstBrace = jsonStr.indexOf('{');
-        const lastBrace = jsonStr.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-            jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-        }
-    }
-
-    if (!jsonStr.startsWith('{')) {
-        console.error("Diagram generation response was not valid JSON:", jsonStr);
-        throw new Error(`The AI returned a non-JSON response. Please try again or rephrase your prompt.`);
-    }
-
-    try {
-        const parsedData = JSON.parse(jsonStr);
-        if (parsedData.nodes && parsedData.edges && Array.isArray(parsedData.nodes) && Array.isArray(parsedData.edges)) {
-            // Ensure nodes have a data.style object, even if data or style is missing from the AI response
-            const sanitizedNodes = parsedData.nodes.map((node: any) => ({
-                ...node,
-                data: {
-                    ...(node.data || {}),
-                    style: node.data?.style || {}
-                }
-            }));
-            return { nodes: sanitizedNodes, edges: parsedData.edges };
-        }
-        throw new Error("Invalid JSON structure received from AI: missing 'nodes' or 'edges' array.");
-    } catch (e: any) {
-        console.error("Failed to parse JSON response from AI:", e);
-        console.error("Attempted to parse the following text:", jsonStr);
-        throw new Error(`The AI returned a malformed response that could not be parsed as JSON. Please try again or rephrase your prompt. Error: ${e.message}`);
-    }
+    const responseText = response.text;
+    // For now, we'll return the raw text. A more sophisticated implementation
+    // would parse this text based on the outputTypeHint to create structured data.
+    return {
+        type: 'text',
+        content: responseText,
+        fileName: file?.name,
+        originalUserHint: outputTypeHint,
+    };
 };
+// --- END: AI Document Analysis ---
 
-export const geocodeAddressWithGemini = async (address: string): Promise<LatLngTuple | { error: string }> => {
-    const client = getClient();
-    const prompt = `
-      You are a geocoding service. Given the following address, provide its latitude and longitude.
-      Address: "${address}"
-      Respond with ONLY a valid JSON object in the format: {"lat": number, "lng": number}.
-      If you cannot determine the coordinates, respond with: {"error": "Unable to geocode address."}
-    `;
 
+// Generic text generation function, used by other service functions
+export const analyzeTextWithGemini = async (
+    prompt: string, 
+    systemInstruction?: string,
+    responseType: 'text' | 'json' = 'text'
+): Promise<{ type: 'text' | 'json' | 'error', content: string }> => {
     try {
-        const response = await client.models.generateContent({
+        const genAI = getAI();
+        const response = await genAI.models.generateContent({
             model: MODEL_TEXT,
             contents: prompt,
             config: {
-                responseMimeType: "application/json",
-                temperature: 0,
-            }
-        });
-
-        const jsonStr = response.text.trim();
-        if (!jsonStr.startsWith('{')) {
-            console.error("Geocoding response was not valid JSON:", jsonStr);
-            return { error: 'Invalid response format from AI geocoding service.' };
-        }
-
-        const parsedData = JSON.parse(jsonStr);
-        
-        if (parsedData.error) {
-            return { error: parsedData.error };
-        }
-        if (typeof parsedData.lat === 'number' && typeof parsedData.lng === 'number') {
-            return [parsedData.lat, parsedData.lng];
-        }
-        return { error: 'Invalid coordinates format from AI.' };
-
-    } catch (error: any) {
-        console.error("Error geocoding with Gemini:", error);
-        return { error: error.message || "Failed to communicate with AI for geocoding." };
-    }
-};
-
-export const getRouteAnalysisForDisplay = async (
-    from: string,
-    to: string,
-    distance: string | null,
-    duration: string | null,
-    travelMode: TravelMode,
-    countryContext: string
-): Promise<string> => {
-    const client = getClient();
-    const prompt = `
-      Provide a brief, insightful analysis for a route in ${countryContext}.
-      - **From**: ${from}
-      - **To**: ${to}
-      - **Travel Mode**: ${travelMode}
-      - **Distance**: ${distance}
-      - **Estimated Duration**: ${duration}
-
-      Your analysis should be in concise markdown and touch upon:
-      1.  **A general overview** of the trip (e.g., "This is a significant cross-country journey...").
-      2.  **Potential challenges** based on the travel mode and geography (e.g., "Expect varied terrain and potential for traffic in urban centers.", "As a walking route, this would require extensive planning and supplies.").
-      3.  **One or two interesting landmarks or cities** that might be along or near the general path.
-      
-      Keep the response brief and easy to read.
-    `;
-    try {
-        const response = await client.models.generateContent({ model: MODEL_TEXT, contents: prompt });
-        return response.text;
-    } catch (error) {
-        console.error("Error getting route analysis from Gemini:", error);
-        return "Could not load AI analysis for this route.";
-    }
-};
-
-export const analyzeTextWithGemini = async (
-    prompt: string,
-    dataContext?: any, // Optional structured data context
-    responseType: 'text' | 'json' = 'text'
-): Promise<{ type: 'text' | 'json' | 'error', content: string | any }> => {
-    const client = getClient();
-    let fullPrompt = prompt;
-    if (dataContext) {
-        fullPrompt += `\n\n### Data Context\n\`\`\`json\n${JSON.stringify(dataContext, null, 2)}\n\`\`\``;
-    }
-    try {
-        const response = await client.models.generateContent({
-            model: MODEL_TEXT,
-            contents: fullPrompt,
-            config: {
+                ...(systemInstruction && { systemInstruction }),
                 ...(responseType === 'json' && { responseMimeType: "application/json" }),
-            }
+            },
         });
-
-        if (responseType === 'json') {
-            let jsonStr = response.text.trim();
-            
-            const fenceRegex = /^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/s;
-            const match = jsonStr.match(fenceRegex);
-            if (match && match[1]) {
-                jsonStr = match[1].trim();
-            }
-            
-            if (!jsonStr.startsWith('{') && !jsonStr.startsWith('[')) {
-                console.error("AI response for JSON was not valid JSON:", jsonStr);
-                return { type: 'error', content: 'AI returned a non-JSON response. It might be an error message.' };
-            }
-
-            try {
-                return { type: 'json', content: JSON.parse(jsonStr) };
-            } catch (e) {
-                console.error("Failed to parse AI JSON response:", e, "\nString was:", jsonStr);
-                return { type: 'error', content: 'Failed to parse JSON response from AI.' };
-            }
+        const text = response.text;
+        if (!text) {
+            return { type: 'error', content: 'Received empty response from AI.' };
         }
-        return { type: 'text', content: response.text };
-
+        return { type: responseType, content: text };
     } catch (error: any) {
-        console.error("Error in analyzeTextWithGemini:", error);
-        return { type: 'error', content: error.message || "An unknown error occurred during AI analysis." };
+        console.error('Error with Gemini API:', error);
+        return { type: 'error', content: error.message || 'An unknown error occurred.' };
     }
 };
 
+// For DataTableView
+export const analyzeSelectedData = async (dataJson: string): Promise<string> => {
+    const prompt = `Here is a JSON array of selected data rows. Provide a concise but insightful analysis. What patterns, correlations, or anomalies do you see? Present your findings in well-structured Markdown format.\n\nData:\n${dataJson}`;
+    const response = await analyzeTextWithGemini(prompt, 'You are a helpful data analyst.');
+    if (response.type === 'error') throw new Error(response.content);
+    return marked.parse(response.content) as string;
+};
 
-console.log('Gemini Service initialized. Ensure API_KEY is set in your environment.');
+// For StatisticalAnalysisView
+export const getStatisticalAnalysis = async (summaryText: string, userQuery?: string, isSubset?: boolean): Promise<string> => {
+    const queryPart = userQuery 
+        ? `The user has a specific question: "${userQuery}". Please answer this question based on the stats.`
+        : 'Based on these statistics, provide a high-level summary. What are the most interesting findings? What could be potential next steps for analysis?';
+    const subsetPart = isSubset ? "Note: This analysis is for a SUBSET of the original data. Mention this in your analysis." : "";
+    const prompt = `You are a helpful data scientist. Here is an automated statistical summary of a dataset:\n\n${summaryText}\n\n${queryPart}\n\n${subsetPart}\n\nProvide the analysis in clear, well-structured Markdown.`;
+    const response = await analyzeTextWithGemini(prompt);
+    if (response.type === 'error') throw new Error(response.content);
+    return marked.parse(response.content) as string;
+};
+
+// For DataCleaningView
+export const getAICleaningSuggestions = async (headers: string[], sampleData: TableRow[]): Promise<string> => {
+    const prompt = `
+You are a data cleaning expert integrated into the "MasYun Data Analyzer" application.
+The user has provided a dataset. Your task is to analyze the headers and a sample of the data to identify potential data quality issues and suggest cleaning steps.
+
+Here is the context:
+- Available Columns: [${headers.join(', ')}]
+- Sample Data (first 5 rows):
+${JSON.stringify(sampleData, null, 2)}
+
+Based on this, provide a concise, actionable report in Markdown format. Structure your response with the following sections:
+
+### 1. Data Quality Quick Scan
+- Briefly mention potential issues you see in the sample data.
+- Examples: Mixed data types in a column, inconsistent casing, leading/trailing whitespace, potential special characters, values that look like they need parsing (e.g., 'USD 1,200.50').
+
+### 2. Recommended Cleaning Steps
+- Provide a bulleted list of specific, recommended actions.
+- For each recommendation, state the column it applies to and the suggested action.
+- Examples:
+  - **Column 'Region'**: Convert to Title Case for consistency.
+  - **Column 'Sales'**: Remove 'USD' and commas, then convert to a numeric data type.
+  - **All Text Columns**: Trim leading/trailing whitespace.
+  - **Column 'ID'**: Check for and remove any duplicate rows based on this column.
+  - **Column 'OrderDate'**: Standardize to YYYY-MM-DD format.
+
+Your response should be clear, easy to understand for a business user, and focused on practical cleaning actions that can be performed within the application.
+`;
+    const response = await analyzeTextWithGemini(prompt);
+    if (response.type === 'error') throw new Error(response.content);
+    return marked.parse(response.content) as string;
+};
+
+
+// For AboutView
+export const generateDocumentation = async (features: string): Promise<string> => {
+    const prompt = `Generate a user-friendly, comprehensive user manual for the "MasYun Data Analyzer" application based on the following features list. The output must be a single, complete HTML file. Use professional but engaging language. Structure it with a title, introduction, and sections for each major feature. Use semantic HTML tags (h1, h2, p, ul, li, strong, code). Style it with embedded CSS within a <style> tag in the <head>. The styling should be clean, modern, and reflect the app's dark, holographic theme (dark backgrounds, bright text colors like cyan, purple, and green, maybe some subtle glow effects).\n\nFeatures:\n${features}`;
+    const response = await analyzeTextWithGemini(prompt, 'You are a technical writer creating user documentation.');
+    if (response.type === 'error') return `<h1>Error</h1><p>${response.content}</p>`;
+    const html = response.content.replace(/^```html\n?/, '').replace(/```$/, '');
+    return html;
+};
+
+// For DiagrammingMatrixView
+export const generateDiagramFromPrompt = async (prompt: string): Promise<{ nodes: DiagramNode[], edges: DiagramEdge[] }> => {
+    const systemInstruction = `You are an AI that generates graph data for a diagramming tool. The user will provide a prompt. You MUST respond with only a valid JSON object containing two keys: "nodes" and "edges".
+    "nodes" should be an array of objects, each with:
+    - id: A unique string identifier.
+    - type: "rectangle", "ellipse", or "diamond".
+    - position: An object with "x" and "y" coordinates. Distribute nodes logically.
+    - size: An object with "width" and "height". Use 150 for width and 75 for height.
+    - data: An object with a "label" (a concise string for the node) and a "style" object. Style can be empty {}.
+    "edges" should be an array of objects, each with:
+    - id: A unique string identifier.
+    - source: The "id" of the source node.
+    - target: The "id" of the target node.
+    - label: (Optional) A short label for the edge.
+    Do not include any explanation or markdown formatting. Only the JSON object.`;
+    
+    const response = await analyzeTextWithGemini(prompt, systemInstruction, 'json');
+    if (response.type === 'error') throw new Error(response.content);
+    try {
+        const parsed = JSON.parse(response.content);
+        if (!parsed.nodes || !parsed.edges) throw new Error("AI response is missing 'nodes' or 'edges' array.");
+        return parsed as { nodes: DiagramNode[], edges: DiagramEdge[] };
+    } catch (e) {
+        throw new Error("AI returned an invalid JSON format for the diagram.");
+    }
+};
+
+// For RoutePlannerView
+export const geocodeAddressWithGemini = async (address: string): Promise<[number, number] | { error: string }> => {
+    const prompt = `Geocode the following address and return only the latitude and longitude as a JSON object with "lat" and "lon" keys. Example: {"lat": 48.8584, "lon": 2.2945}. Address: "${address}"`;
+    const response = await analyzeTextWithGemini(prompt, 'You are a geocoding service. Respond only with JSON.', 'json');
+    if (response.type === 'error') return { error: response.content };
+    try {
+        const parsed = JSON.parse(response.content);
+        if (typeof parsed.lat === 'number' && typeof parsed.lon === 'number') return [parsed.lat, parsed.lon];
+        return { error: 'Invalid geocoding response format.' };
+    } catch (e) { return { error: 'Failed to parse geocoding response.' }; }
+};
+
+export const getRouteAnalysisForDisplay = async (from: string, to: string, distance: string | null, duration: string | null, mode: string, country: string): Promise<string> => {
+    const prompt = `Provide a very brief, one-paragraph analysis for a travel route.
+    - From: ${from}
+    - To: ${to}
+    - Distance (straight-line): ${distance || 'N/A'}
+    - Estimated Duration (${mode}): ${duration || 'N/A'}
+    - Country context: ${country}
+    Mention any major geographical features, potential challenges (e.g., mountains, water crossings, border), or notable points of interest along the general path. Keep it concise.`;
+    const response = await analyzeTextWithGemini(prompt);
+    if (response.type === 'error') return `AI Analysis Error: ${response.content}`;
+    return response.content;
+};
+
+// For MapView
+export const getMapInsights = async (context: string, userPrompt: string): Promise<string> => {
+    const systemInstruction = `You are a geographical data analyst. Based on the following map data context and user query, provide concise, insightful analysis in well-structured Markdown. Focus on patterns, anomalies, and potential next steps for investigation.`;
+    const fullPrompt = `Map Context:\n${context}\n\nUser's Question:\n${userPrompt}`;
+    const response = await analyzeTextWithGemini(fullPrompt, systemInstruction, 'text');
+    if (response.type === 'error') throw new Error(response.content);
+    return response.content;
+};
+
+
+// For AdvancedAIToolsView
+export const generateAICommand = async (prompt: string): Promise<string> => {
+    const response = await analyzeTextWithGemini(prompt);
+    if (response.type === 'error') throw new Error(response.content);
+    return response.content;
+};

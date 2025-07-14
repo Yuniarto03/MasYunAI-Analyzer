@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDropzone, FileWithPath } from 'react-dropzone';
 import * as XLSX from 'xlsx';
@@ -131,12 +133,12 @@ export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduc
         baseClassName: 'p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 border transition-colors',
         style: {
             backgroundColor: RAW_COLOR_VALUES[currentTheme.darkGray] || '#1f2937',
-            color: RAW_COLOR_VALUES[(currentTheme.textColor || 'text-gray-200').replace('text-', '')] || '#e5e7eb',
+            color: RAW_COLOR_VALUES[(currentTheme.textColor || 'text-gray-200').replace('text-','')] || '#e5e7eb',
             borderColor: RAW_COLOR_VALUES[currentTheme.mediumGray] || '#4b5563'
         },
         optionStyle: {
             backgroundColor: RAW_COLOR_VALUES[currentTheme.darkGray] || '#1f2937',
-            color: RAW_COLOR_VALUES[(currentTheme.textColor || 'text-gray-200').replace('text-', '')] || '#e5e7eb'
+            color: RAW_COLOR_VALUES[(currentTheme.textColor || 'text-gray-200').replace('text-','')] || '#e5e7eb'
         }
     };
   }, []);
@@ -500,6 +502,7 @@ export const RoutePlannerView: React.FC<RoutePlannerViewProps> = ({ theme, reduc
             Perencana & Analis Rute (Beta)
         </h1>
 
+        {/* Manual Route Input Section */}
         <div className={`${theme.cardBg} p-4 rounded-xl shadow-xl border ${theme.borderColor} mb-6`}>
           <div className="flex justify-between items-center mb-3 cursor-pointer" onClick={() => setIsManualInputMinimized(!isManualInputMinimized)}>
             <h2 className={`text-lg font-semibold text-${theme.accent1}`}>Konfigurasi & Input Rute Manual</h2>

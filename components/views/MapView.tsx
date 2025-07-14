@@ -4,6 +4,9 @@ import { useDropzone } from 'react-dropzone';
 import { Panel } from '../Panel';
 import { DataContext } from '../../contexts/DataContext';
 import { TableRow, AggregatorType, IconType, FileHeaders, GeoJsonFeature, GeoJsonFeatureCollection, MapFeatureStyle, GeoJsonGeometry } from '../../types';
+import { getMapInsights } from '../../services/geminiService';
+import { marked } from 'marked';
+import { CONTINENT_DATA, COUNTRIES_DATA } from '../../constants';
 
 // --- ICONS ---
 const FitScreenIcon: IconType = ({ className }) => <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5M15 15l5.25 5.25" /></svg>;
@@ -12,7 +15,8 @@ const UploadIcon: IconType = ({ className }) => <svg xmlns="http://www.w3.org/20
 const CloseIcon: IconType = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>;
 const PlusIcon: IconType = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>;
 const MinusIcon: IconType = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12h-15" /></svg>;
-const ValueIcon: IconType = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" /></svg>;
+const ValueIcon: IconType = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" /></svg>;
+const BrainIcon: IconType = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>;
 
 
 const MAP_WIDTH = 1000;
@@ -30,7 +34,7 @@ const CHOROPLETH_PALETTES: Record<string, [string, string]> = {
 type MapTheme = 'dark' | 'light' | 'blueprint';
 
 const MapControlPanel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <Panel className="w-80 flex-shrink-0 flex flex-col h-full">
+    <Panel className="w-80 flex-shrink-0 flex flex-col h-full !p-4">
         <div className="flex-grow overflow-y-auto pr-2 hide-scrollbar">{children}</div>
     </Panel>
 );
@@ -75,18 +79,19 @@ const MapInspectorPanel: React.FC<{
     );
 };
 
-const MapLegend: React.FC<{ min: number; max: number; palette: [string, string] }> = ({ min, max, palette }) => {
+const MapLegend: React.FC<{ min: number; max: number; palette: [string, string], valueField: string, aggregator: string }> = ({ min, max, palette, valueField, aggregator }) => {
     const gradientId = `legend-gradient-${palette.join('-').replace(/#/g, '')}`;
     return (
         <div className="absolute bottom-4 left-4 bg-gray-800/70 backdrop-blur-sm p-3 rounded-lg border border-gray-600 shadow-lg text-white text-xs">
-            <svg width="100" height="15" className="mb-1">
+            <p className="font-bold mb-1 truncate max-w-[150px]">{aggregator} of {valueField}</p>
+            <svg width="150" height="15" className="mb-1">
                 <defs>
                     <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor={palette[0]} />
                         <stop offset="100%" stopColor={palette[1]} />
                     </linearGradient>
                 </defs>
-                <rect x="0" y="0" width="100" height="15" fill={`url(#${gradientId})`} />
+                <rect x="0" y="0" width="150" height="15" fill={`url(#${gradientId})`} />
             </svg>
             <div className="flex justify-between">
                 <span>{min.toLocaleString()}</span>
@@ -96,7 +101,7 @@ const MapLegend: React.FC<{ min: number; max: number; palette: [string, string] 
     );
 };
 
-const MapView: React.FC = () => {
+export const MapView: React.FC = () => {
     const { tableData, fileHeaders } = useContext(DataContext);
     
     const [geoJson, setGeoJson] = useState<GeoJsonFeatureCollection | null>(null);
@@ -104,14 +109,23 @@ const MapView: React.FC = () => {
     const [isPanning, setIsPanning] = useState(false);
     const panStartPos = useRef({ x: 0, y: 0 });
     const svgRef = useRef<SVGSVGElement>(null);
-    const [mapTheme, setMapTheme] = useState<MapTheme>('dark');
+    const [mapTheme, setMapTheme] = useState<MapTheme>('blueprint');
     const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
     const [featureStyles, setFeatureStyles] = useState<Record<string, MapFeatureStyle>>({});
-    
     const [joinField, setJoinField] = useState<string | null>(null);
     const [valueField, setValueField] = useState<string | null>(null);
     const [aggregator, setAggregator] = useState<AggregatorType>('sum');
     const [choroplethPalette, setChoroplethPalette] = useState<keyof typeof CHOROPLETH_PALETTES>('viridis');
+    const [hoveredFeature, setHoveredFeature] = useState<{ id: string, name: string, x: number, y: number } | null>(null);
+    const [popup, setPopup] = useState<{feature: GeoJsonFeature, data: TableRow[], x: number, y: number} | null>(null);
+
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiResult, setAiResult] = useState('');
+    const [isAiLoading, setIsAiLoading] = useState(false);
+
+    const [selectedContinent, setSelectedContinent] = useState<string>('World');
+    const [selectedCountry, setSelectedCountry] = useState<string>('');
+    const [selectedProvince, setSelectedProvince] = useState<string>('');
 
     const project = useCallback((lat: number, lon: number): { x: number, y: number } => {
         const x = (lon + 180) * (MAP_WIDTH / 360);
@@ -141,15 +155,41 @@ const MapView: React.FC = () => {
         };
         let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
         const getBounds = (coords: any[]) => {
+            if (!coords || !Array.isArray(coords)) return;
             for (const p of coords) {
-                if(Array.isArray(p[0])) getBounds(p);
-                else { minLng = Math.min(minLng, p[0]); maxLng = Math.max(maxLng, p[0]); minLat = Math.min(minLat, p[1]); maxLat = Math.max(maxLat, p[1]); }
+                if(Array.isArray(p) && Array.isArray(p[0])) getBounds(p);
+                else if (Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number') { 
+                    minLng = Math.min(minLng, p[0]); maxLng = Math.max(maxLng, p[0]); minLat = Math.min(minLat, p[1]); maxLat = Math.max(maxLat, p[1]); 
+                }
             }
         };
         targetFeatures.forEach(f => { if(f.geometry) getBounds(f.geometry.coordinates); });
         focusOnBbox(minLng, minLat, maxLng, maxLat);
     }, [geoJson, focusOnBbox]);
     
+    const availableProvinces = useMemo(() => {
+        if (!geoJson) return [];
+        const provinceSet = new Set<string>();
+        const provinceKeys = ['province', 'NAME_1', 'state', 'ADM1_NAME'];
+        let keyFound: string | null = null;
+        for (const feature of geoJson.features) {
+            if (feature.properties) {
+                if (!keyFound) {
+                    for (const key of provinceKeys) {
+                        if (key in feature.properties) {
+                            keyFound = key;
+                            break;
+                        }
+                    }
+                }
+                if (keyFound && feature.properties[keyFound] != null) {
+                    provinceSet.add(String(feature.properties[keyFound]));
+                }
+            }
+        }
+        return Array.from(provinceSet).sort();
+    }, [geoJson]);
+
     const onDrop = useCallback((acceptedFiles: File[]) => {
         const file = acceptedFiles[0];
         if (!file) return;
@@ -163,6 +203,7 @@ const MapView: React.FC = () => {
                     setSelectedFeatureId(null);
                     setJoinField(null);
                     setValueField(null);
+                    setSelectedProvince('');
                     setTimeout(() => fitToBounds(data.features), 0);
                 } else {
                     alert('Invalid GeoJSON: Must be a FeatureCollection.');
@@ -254,6 +295,17 @@ const MapView: React.FC = () => {
         return fileHeaders.filter(h => geoProps.has(h));
     }, [geoJson, fileHeaders]);
 
+    const joinedData = useMemo(() => {
+        if (!joinField || !geoJson) return new Map();
+        const map = new Map<string, TableRow[]>();
+        tableData.forEach(row => {
+            const key = String(row[joinField]);
+            if (!map.has(key)) map.set(key, []);
+            map.get(key)?.push(row);
+        });
+        return map;
+    }, [joinField, geoJson, tableData]);
+
     const { choroplethStyles, legendData } = useMemo(() => {
         if (!joinField || !valueField || !geoJson || !tableData.length) return { choroplethStyles: {}, legendData: null };
         const aggregatedData = new Map<string, number>();
@@ -308,14 +360,167 @@ const MapView: React.FC = () => {
         return { choroplethStyles: styles, legendData: { min, max } };
     }, [joinField, valueField, aggregator, choroplethPalette, geoJson, tableData]);
 
+    const handleFeatureClick = (e: ReactMouseEvent, feature: GeoJsonFeature) => {
+        if (!svgRef.current) return;
+        const rect = svgRef.current.getBoundingClientRect();
+        e.stopPropagation();
+        const id = String(feature.id || geoJson?.features.indexOf(feature));
+        setSelectedFeatureId(id);
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        if (joinField) {
+            const joinValue = feature.properties?.[joinField];
+            if (joinValue != null) {
+                const relatedData = joinedData.get(String(joinValue)) || [];
+                setPopup({feature, data: relatedData, x, y});
+            } else {
+                 setPopup({feature, data: [], x, y});
+            }
+        } else {
+             setPopup({feature, data: [], x, y});
+        }
+    };
+    
+    const handleFeatureHover = (e: ReactMouseEvent, feature: GeoJsonFeature) => {
+        if (!svgRef.current) return;
+        const rect = svgRef.current.getBoundingClientRect();
+        const id = String(feature.id || geoJson?.features.indexOf(feature));
+        const name = String(feature.properties?.name || feature.properties?.NAME || feature.properties?.ADMIN || 'N/A');
+        setHoveredFeature({ id, name, x: e.clientX, y: e.clientY });
+    };
+
+    const handleGenerateInsights = useCallback(async () => {
+        if (!aiPrompt.trim()) return;
+        setIsAiLoading(true);
+        setAiResult('');
+        try {
+            let context = `The user is viewing a map with ${geoJson?.features.length || 0} features.`;
+            if (joinField && valueField && legendData) {
+                context += ` The map is colored as a choropleth, showing the ${aggregator} of "${valueField}" joined by the "${joinField}" field. The data ranges from ${legendData.min.toLocaleString()} to ${legendData.max.toLocaleString()}.`;
+            } else {
+                context += " No data is currently joined to the map.";
+            }
+            const result = await getMapInsights(context, aiPrompt);
+            setAiResult(result);
+        } catch (error: any) {
+            setAiResult(`**Error:** ${error.message}`);
+        }
+        setIsAiLoading(false);
+    }, [aiPrompt, geoJson, joinField, valueField, aggregator, legendData]);
+
     const selectedFeature = useMemo(() => geoJson?.features.find((f, i) => String(f.id || i) === selectedFeatureId), [geoJson, selectedFeatureId]);
     const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: { 'application/json': ['.json', '.geojson'] }, multiple: false });
 
+    const filteredCountries = useMemo(() => {
+        if (!selectedContinent || selectedContinent === 'World') return COUNTRIES_DATA;
+        return COUNTRIES_DATA.filter(c => c.continent === selectedContinent);
+    }, [selectedContinent]);
+
+    const handleContinentChange = (e: ChangeEvent<HTMLSelectElement>) => {
+        const continentName = e.target.value;
+        setSelectedContinent(continentName);
+        setSelectedCountry('');
+        setSelectedProvince('');
+        const continent = CONTINENT_DATA.find(c => c.name === continentName);
+        if (continent?.bbox) {
+            focusOnBbox(...continent.bbox);
+        }
+    };
+
+    const handleCountryChange = (e: ChangeEvent<HTMLSelectElement>) => {
+        const countryCode = e.target.value;
+        setSelectedCountry(countryCode);
+        setSelectedProvince('');
+        if (countryCode === "") {
+            const continent = CONTINENT_DATA.find(c => c.name === selectedContinent);
+            if (continent?.bbox) {
+                focusOnBbox(...continent.bbox);
+            }
+            return;
+        }
+        const country = COUNTRIES_DATA.find(c => c.code === countryCode);
+        if (country?.bbox) {
+            focusOnBbox(...country.bbox);
+        }
+    };
+
+    const handleProvinceChange = (e: ChangeEvent<HTMLSelectElement>) => {
+        const provinceName = e.target.value;
+        setSelectedProvince(provinceName);
+
+        if (!provinceName) {
+            if (selectedCountry) {
+                 const country = COUNTRIES_DATA.find(c => c.code === selectedCountry);
+                 if (country?.bbox) {
+                     focusOnBbox(...country.bbox);
+                     return;
+                 }
+            }
+             if (selectedContinent) {
+                const continent = CONTINENT_DATA.find(c => c.name === selectedContinent);
+                if (continent?.bbox) {
+                    focusOnBbox(...continent.bbox);
+                    return;
+                }
+            }
+            fitToBounds();
+            return;
+        }
+        
+        const provinceKeys = ['province', 'NAME_1', 'state', 'ADM1_NAME'];
+        let keyFound: string | null = null;
+        if (geoJson) {
+            for (const feature of geoJson.features) {
+                if (feature.properties) {
+                    for (const key of provinceKeys) {
+                        if (key in feature.properties) {
+                            keyFound = key;
+                            break;
+                        }
+                    }
+                    if (keyFound) break;
+                }
+            }
+            if (keyFound) {
+                const provinceFeatures = geoJson.features.filter(f => f.properties && f.properties[keyFound] === provinceName);
+                if (provinceFeatures.length > 0) {
+                    fitToBounds(provinceFeatures);
+                }
+            }
+        }
+    };
+
     return (
-        <div className="flex h-full gap-6">
+        <div className="flex h-full gap-6 p-4">
             <MapControlPanel>
                  <div className="space-y-4">
-                     <div className="pt-4 border-t border-gray-700">
+                    <div className="pt-4 border-t border-gray-700">
+                        <label className="text-sm font-semibold text-gray-300">Geographic Focus</label>
+                        <div className="space-y-2 mt-2">
+                            <div>
+                                <label className="text-xs font-semibold text-gray-400">Continent</label>
+                                <select value={selectedContinent} onChange={handleContinentChange} className="w-full p-2 bg-gray-700 rounded mt-1 text-sm">
+                                    {CONTINENT_DATA.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-gray-400">Country</label>
+                                <select value={selectedCountry} onChange={handleCountryChange} className="w-full p-2 bg-gray-700 rounded mt-1 text-sm" disabled={filteredCountries.length === 0}>
+                                    <option value="">-- Select Country --</option>
+                                    {filteredCountries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                                </select>
+                            </div>
+                             <div>
+                                <label className="text-xs font-semibold text-gray-400">Province / State</label>
+                                <select value={selectedProvince} onChange={handleProvinceChange} className="w-full p-2 bg-gray-700 rounded mt-1 text-sm" disabled={availableProvinces.length === 0}>
+                                    <option value="">-- All Provinces --</option>
+                                    {availableProvinces.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="pt-4 border-t border-gray-700">
                         <label className="text-sm font-semibold text-gray-300">Map Theme</label>
                         <div className="flex items-center gap-1 bg-gray-800/50 p-1 rounded-full backdrop-blur-sm mt-2">
                             <button onClick={() => setMapTheme('dark')} className={`flex-1 text-xs px-3 py-1 rounded-full transition-colors ${mapTheme==='dark' ? 'bg-purple-600 text-white' : 'hover:bg-purple-600/20'}`}>Dark</button>
@@ -337,7 +542,7 @@ const MapView: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="text-xs font-semibold text-gray-400">Aggregation</label>
-                                    <select value={aggregator} onChange={e => setAggregator(e.target.value as AggregatorType)} className="w-full p-2 bg-gray-700 rounded mt-1 text-sm">{AGGREGATOR_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}</select>
+                                    <select value={aggregator} onChange={e => setAggregator(e.target.value as AggregatorType)} className="w-full p-2 bg-gray-700 rounded mt-1 text-sm">{AGGREGATOR_OPTIONS.map(a => <option key={a} value={a}>{a.charAt(0).toUpperCase() + a.slice(1)}</option>)}</select>
                                 </div>
                                  <div>
                                     <label className="text-xs font-semibold text-gray-400 block mb-1">Color Palette</label>
@@ -346,6 +551,14 @@ const MapView: React.FC = () => {
                             </div>
                         </div>
                     )}
+                    <div className="pt-4 border-t border-gray-700">
+                        <label className="text-sm font-semibold text-gray-300">AI Geospatial Analysis</label>
+                         <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder="e.g., Which regions have the highest sales and why?" rows={3} className="w-full mt-2 p-2 bg-gray-700 rounded text-sm resize-none"></textarea>
+                         <button onClick={handleGenerateInsights} disabled={isAiLoading || !aiPrompt} className="w-full mt-2 p-2 text-sm bg-purple-600 hover:bg-purple-500 rounded-md text-white disabled:opacity-50 flex items-center justify-center gap-2">
+                             {isAiLoading ? 'Analyzing...' : <><BrainIcon className="w-4 h-4"/> Get Insights</>}
+                         </button>
+                         {aiResult && <div className="mt-2 p-2 bg-gray-800/50 rounded-lg max-h-48 overflow-y-auto text-xs prose prose-sm prose-invert" dangerouslySetInnerHTML={{ __html: marked.parse(aiResult) }}></div>}
+                    </div>
                  </div>
             </MapControlPanel>
 
@@ -370,13 +583,35 @@ const MapView: React.FC = () => {
                                                 stroke: finalStyle.stroke,
                                                 strokeWidth: finalStyle.strokeWidth
                                             }}
-                                            onClick={() => setSelectedFeatureId(id)}
+                                            onClick={(e) => handleFeatureClick(e, feature)}
+                                            onMouseEnter={(e) => handleFeatureHover(e, feature)}
+                                            onMouseLeave={() => setHoveredFeature(null)}
                                         />
                                     );
                                 })}
                             </g>
                         </svg>
-                        {legendData && <MapLegend min={legendData.min} max={legendData.max} palette={CHOROPLETH_PALETTES[choroplethPalette]} />}
+                        {legendData && valueField && <MapLegend min={legendData.min} max={legendData.max} palette={CHOROPLETH_PALETTES[choroplethPalette]} valueField={valueField} aggregator={aggregator} />}
+                         {hoveredFeature && <div className="map-tooltip" style={{ top: hoveredFeature.y, left: hoveredFeature.x, transform: 'translate(10px, -100%)' }}>{hoveredFeature.name}</div>}
+                         {popup && (
+                            <div className="map-popup" style={{ top: popup.y, left: popup.x }} onClick={e => e.stopPropagation()}>
+                                <div className="map-popup-content-wrapper">
+                                    <div className="map-popup-header">
+                                        <h3 className="map-popup-title">{popup.feature.properties?.name || 'Feature Details'}</h3>
+                                        <button onClick={() => setPopup(null)} className="map-popup-close-button"><CloseIcon className="w-5 h-5" /></button>
+                                    </div>
+                                    <div className="map-popup-content">
+                                        {popup.data.length > 0 ? (
+                                             popup.data.map((row, i) => (<div key={i} className="mb-2 pb-2 border-b border-gray-700 last:border-b-0 last:pb-0 last:mb-0">
+                                                 {Object.entries(row).map(([key, value]) => (<div key={key} className="map-popup-property"><span className="map-popup-key">{key}:</span><span className="map-popup-value">{String(value)}</span></div>))}
+                                             </div>))
+                                        ) : (
+                                            Object.entries(popup.feature.properties || {}).map(([key, value]) => (<div key={key} className="map-popup-property"><span className="map-popup-key">{key}:</span><span className="map-popup-value">{String(value)}</span></div>))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                         )}
                         <div className="absolute top-2 right-2 flex items-center gap-2 bg-gray-800/50 p-1.5 rounded-full backdrop-blur-sm">
                             <button onClick={() => zoomWithFactor(1 / 1.2)} className="p-1.5 text-gray-300 hover:bg-gray-700 rounded-full" title="Zoom In"><PlusIcon className="w-5 h-5"/></button>
                             <button onClick={() => zoomWithFactor(1.2)} className="p-1.5 text-gray-300 hover:bg-gray-700 rounded-full" title="Zoom Out"><MinusIcon className="w-5 h-5"/></button>
@@ -398,5 +633,3 @@ const MapView: React.FC = () => {
         </div>
     );
 };
-
-export default MapView;

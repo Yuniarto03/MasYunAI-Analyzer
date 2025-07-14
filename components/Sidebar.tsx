@@ -1,11 +1,16 @@
+
+
+
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { SIDEBAR_SECTIONS } from '../constants';
-import { IconType, ViewKey, SidebarItemConfig } from '../types';
+import { SIDEBAR_SECTIONS, ProjectIcon } from '../constants';
+import { IconType, ViewKey, SidebarItemConfig, RecentProject } from '../types';
 
 interface SidebarProps {
   isOpen: boolean;
-  onNavigate: (viewKey: ViewKey) => void;
+  onNavigate: (viewKey: ViewKey, context?: any) => void;
   activeView: ViewKey;
+  activePivotId: string | null;
+  recentProjects: RecentProject[];
 }
 
 const ChevronDownIcon: IconType = ({ className, ...props }) => (
@@ -16,13 +21,13 @@ const ChevronDownIcon: IconType = ({ className, ...props }) => (
 
 const SidebarItem: React.FC<{ 
   item: SidebarItemConfig; 
-  onNavigate: (viewKey: ViewKey) => void;
+  onNavigate: () => void;
   isActive: boolean;
   itemRef: React.RefObject<HTMLAnchorElement>;
 }> = ({ item, onNavigate, isActive, itemRef }) => {
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    onNavigate(item.viewId);
+    onNavigate();
   };
   
   return (
@@ -32,7 +37,6 @@ const SidebarItem: React.FC<{
       onClick={handleClick}
       className={`sidebar-item group ${isActive ? 'sidebar-item-active' : ''}`}
       title={item.name}
-      data-viewid={item.viewId}
     >
       <item.icon className="sidebar-item-icon" />
       <span className="text-sm font-medium">{item.name}</span>
@@ -40,22 +44,32 @@ const SidebarItem: React.FC<{
   );
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView, activePivotId, recentProjects }) => {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [indicatorStyle, setIndicatorStyle] = useState({});
-  const itemsRef = useRef<Record<string, React.RefObject<HTMLAnchorElement>>>({});
-
-  // Ensure refs are created for each item
+  
+  const staticItemsRef = useRef<Record<string, React.RefObject<HTMLAnchorElement>>>({});
   SIDEBAR_SECTIONS.forEach(section => {
     section.items.forEach(item => {
-      if (!itemsRef.current[item.name]) {
-        itemsRef.current[item.name] = React.createRef<HTMLAnchorElement>();
+      if (!staticItemsRef.current[item.viewId]) {
+        staticItemsRef.current[item.viewId] = React.createRef<HTMLAnchorElement>();
       }
     });
   });
 
+  const recentProjectsRefs = useRef<Record<string, React.RefObject<HTMLAnchorElement>>>({});
+  recentProjects.forEach(p => {
+    if (!recentProjectsRefs.current[p.id]) {
+        recentProjectsRefs.current[p.id] = React.createRef();
+    }
+  });
+  
+
   useLayoutEffect(() => {
-    const activeItemRef = itemsRef.current[activeView]?.current;
+    const activeItemRef = (activeView === 'pivotTable' && activePivotId)
+      ? recentProjectsRefs.current[activePivotId]?.current
+      : staticItemsRef.current[activeView]?.current;
+
     if (activeItemRef) {
       setIndicatorStyle({
         top: activeItemRef.offsetTop,
@@ -63,10 +77,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView
         opacity: 1,
       });
     } else {
-       // Hide indicator if active view is not in the sidebar (e.g., welcome screen)
        setIndicatorStyle({ opacity: 0 });
     }
-  }, [activeView, isOpen, collapsedSections]);
+  }, [activeView, activePivotId, isOpen, collapsedSections, recentProjects]);
 
   const toggleSection = (title: string) => {
     setCollapsedSections(prev => ({
@@ -81,6 +94,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView
     >
       {SIDEBAR_SECTIONS.map((section, sectionIndex) => {
         const isCollapsed = collapsedSections[section.title] || false;
+        const isRecentProjects = section.title === 'Recent Projects';
+
         return (
           <div key={sectionIndex} className="mb-2">
             <button 
@@ -96,21 +111,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate, activeView
               id={`section-content-${sectionIndex}`}
               className={`relative transition-all duration-300 ease-in-out overflow-hidden ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-96 opacity-100'}`}
             >
-              {/* Active Item Indicator - one per section for proper positioning context */}
               <div 
                 className="sidebar-indicator"
                 style={indicatorStyle}
               />
               <div className="space-y-1">
-                {section.items.map((item) => (
-                  <SidebarItem 
-                    key={item.name} 
-                    item={item} 
-                    onNavigate={onNavigate}
-                    isActive={activeView === item.viewId}
-                    itemRef={itemsRef.current[item.name]}
-                  />
-                ))}
+                {isRecentProjects ? (
+                  recentProjects.length > 0 ? (
+                    recentProjects.map(project => (
+                      <SidebarItem
+                        key={project.id}
+                        item={{ name: project.name, viewId: 'pivotTable', icon: ProjectIcon }}
+                        onNavigate={() => onNavigate('pivotTable', { pivotId: project.id })}
+                        isActive={activeView === 'pivotTable' && activePivotId === project.id}
+                        itemRef={recentProjectsRefs.current[project.id]}
+                      />
+                    ))
+                  ) : (
+                    <p className="px-2 text-xs text-gray-500">No recent projects.</p>
+                  )
+                ) : (
+                  section.items.map((item) => (
+                    <SidebarItem 
+                      key={item.viewId} 
+                      item={item} 
+                      onNavigate={() => onNavigate(item.viewId)}
+                      isActive={activeView === item.viewId}
+                      itemRef={staticItemsRef.current[item.viewId]}
+                    />
+                  ))
+                )}
               </div>
             </div>
           </div>
