@@ -399,6 +399,17 @@
             animation: pulse-dot-glow 2.5s infinite ease-in-out;
             transition: filter 0.3s ease;
         }
+        
+        /* --- NEW: Chart Style Classes --- */
+        .recharts-pie-sector, .recharts-bar-rectangle, .recharts-line-curve, .recharts-area-path {
+            transition: filter 0.2s ease-in-out;
+        }
+        .chart-glow-filter {
+            filter: drop-shadow(0 0 4px currentColor);
+        }
+        .chart-strong-glow-filter {
+            filter: drop-shadow(0 0 8px currentColor);
+        }
 
         /* --- NEW: Styles for Welcome Screen Widgets --- */
         .welcome-widget-container {
@@ -446,43 +457,64 @@
             filter: drop-shadow(0 0 10px currentColor);
         }
         
-        /* --- NEW: Holographic Glass Dock Styles --- */
+        /* --- UPDATED: Holographic Glass Dock Styles (Colorful & Interactive) --- */
         .glass-dock-container {
             position: fixed;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            align-items: center;
+            align-items: flex-end; /* Align to bottom for vertical animation */
             justify-content: center;
-            padding: 8px;
-            background: rgba(30, 41, 59, 0.5); /* Semi-transparent dark blue */
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-radius: 9999px; /* Pill shape */
+            padding: 10px;
+            height: 80px; /* Give it some height for items to grow into */
+            background: rgba(30, 41, 59, 0.4); /* Dark blue base */
+            backdrop-filter: blur(16px) saturate(1.5);
+            -webkit-backdrop-filter: blur(16px) saturate(1.5);
+            border-radius: 20px;
             border: 1px solid rgba(139, 92, 246, 0.4);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3), 
+                        inset 0 1px 1px rgba(255, 255, 255, 0.1),
+                        inset 0 -1px 1px rgba(0, 0, 0, 0.2);
             z-index: 1000;
             transition: all 0.3s ease;
         }
 
-        .glass-dock-items {
-            display: flex;
-            gap: 12px; /* Space between items */
-            position: relative;
-            z-index: 2; /* Items above the spotlight */
+        .glass-dock-container::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 20px;
+            padding: 1px; /* To prevent covering the border */
+            background: linear-gradient(45deg, rgba(217, 70, 239, 0.1), rgba(59, 130, 246, 0.1), rgba(34, 197, 94, 0.1));
+            -webkit-mask: 
+                linear-gradient(#fff 0 0) content-box, 
+                linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
         }
 
+        .glass-dock-items {
+            display: flex;
+            gap: 16px; /* Increased gap */
+            align-items: flex-end; /* Align to bottom */
+        }
+
+        /* This spotlight will be a colorful animated glow under the icons */
         .dock-spotlight {
             position: absolute;
-            top: 6px;
+            bottom: -10px; /* Position below the dock */
             left: 0;
-            height: calc(100% - 12px);
-            background: radial-gradient(circle, rgba(168, 85, 247, 0.4), transparent 70%);
-            border-radius: 9999px;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
-            z-index: 1;
+            width: 150px;
+            height: 150px;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.6) 0%, rgba(59, 130, 246, 0.4) 40%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(40px);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            z-index: -1;
             pointer-events: none;
+            opacity: 0;
         }
 
         .glass-dock-item {
@@ -493,49 +525,50 @@
             justify-content: center;
             cursor: pointer;
             position: relative;
-            transition: transform 0.2s ease-out;
-        }
-
-        .glass-dock-item:hover {
-            transform: scale(1.15) translateY(-4px);
+            /* transition will be handled by JS for performance and complexity */
+            will-change: transform; 
+            transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
         .dock-item-icon {
-            width: 32px;
-            height: 32px;
-            color: white;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
-            transition: filter 0.2s ease;
+            width: 36px;
+            height: 36px;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+            transition: filter 0.2s ease, transform 0.2s ease;
         }
 
+        /* Hover on item changes icon, not the item itself, which is controlled by JS */
         .glass-dock-item:hover .dock-item-icon {
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)) drop-shadow(0 0 5px #fff);
+            filter: drop-shadow(0 5px 10px rgba(0,0,0,0.5)) drop-shadow(0 0 8px #fff);
+            transform: translateY(-2px); /* Slight icon lift inside the button */
         }
 
         .dock-tooltip {
             position: absolute;
-            bottom: 100%; /* Position above the item */
-            margin-bottom: 12px;
+            bottom: 110%; /* Adjust position based on new dock height */
             padding: 6px 12px;
-            font-size: 12px;
-            font-weight: 500;
+            font-size: 13px;
+            font-weight: 600;
             color: white;
-            background: rgba(14, 24, 45, 0.8);
-            backdrop-filter: blur(5px);
-            border-radius: 6px;
-            border: 1px solid rgba(139, 92, 246, 0.4);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            background: rgba(14, 24, 45, 0.85);
+            backdrop-filter: blur(8px);
+            border-radius: 8px;
+            border: 1px solid rgba(139, 92, 246, 0.5);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             white-space: nowrap;
             opacity: 0;
-            transform: translateY(8px);
+            transform: translateY(10px) scale(0.9);
             transition: opacity 0.2s ease, transform 0.2s ease;
             pointer-events: none;
+            z-index: 10;
         }
 
-        .glass-dock-item:hover .dock-tooltip {
+        /* JS will add a class or style to show tooltip on hover */
+        .glass-dock-item.tooltip-visible .dock-tooltip {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateY(0) scale(1);
         }
+
 
         /* --- UPDATED: Diagramming Matrix Styles (PERFORMANCE) --- */
         .diagram-canvas {
@@ -741,7 +774,7 @@
             margin: 0 4px;
         }
         
-        /* --- NEW: Dashboard Grid & Widgets --- */
+        /* --- UPDATED: Dashboard Grid & Widgets --- */
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(12, 1fr);
@@ -750,17 +783,67 @@
         }
 
         .widget-wrapper {
-            grid-column: span var(--w, 4);
-            grid-row: span var(--h, 2);
-            display: flex;
-            flex-direction: column;
             position: relative;
+            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+        }
+
+        .widget-wrapper.dragging {
+            opacity: 0.5;
+            z-index: 50;
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(168, 85, 247, 0.5);
         }
 
         .widget-wrapper .panel-holographic {
-            flex-grow: 1;
+            height: 100%;
             display: flex;
             flex-direction: column;
+        }
+
+        .widget-wrapper.edit-mode .panel-holographic {
+            border-style: dashed;
+            border-color: rgba(168, 85, 247, 0.6);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .widget-header-drag-handle {
+            cursor: grab;
+        }
+        
+        .widget-wrapper.edit-mode .widget-header-drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .widget-resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+            z-index: 30;
+        }
+
+        .widget-resize-handle::after {
+            content: '';
+            position: absolute;
+            right: 4px;
+            bottom: 4px;
+            width: 8px;
+            height: 8px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.7);
+            border-right: 2px solid rgba(255, 255, 255, 0.7);
+            border-bottom-right-radius: 2px;
+            transition: all 0.2s;
+        }
+        .widget-resize-handle:hover::after {
+            border-color: #67e8f9; /* cyan-300 */
+        }
+
+        .widget-wrapper.drag-over .panel-holographic {
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.7), inset 0 0 20px rgba(34, 197, 94, 0.4);
+            border-color: rgba(34, 197, 94, 0.8) !important;
+            transform: scale(1.02);
         }
 
         .widget-content {
@@ -807,13 +890,17 @@
             letter-spacing: 0.05em;
         }
 
-        .edit-mode-controls {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            min-height: 2rem; /* Ensure consistent height */
+        }
+
+        .widget-controls {
             display: flex;
             gap: 0.5rem;
-            z-index: 20;
         }
 
         .widget-control-button {
@@ -1115,20 +1202,21 @@
 <script type="importmap">
 {
   "imports": {
+    "react": "https://esm.sh/react@^19.1.0",
     "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
     "react/": "https://esm.sh/react@^19.1.0/",
-    "react": "https://esm.sh/react@^19.1.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.6.0",
-    "recharts": "https://esm.sh/recharts@^3.0.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.8.0",
+    "marked": "https://esm.sh/marked@^16.0.0",
+    "recharts": "https://esm.sh/recharts@^3.0.2",
     "react-dropzone": "https://esm.sh/react-dropzone@^14.3.8",
-    "three": "https://esm.sh/three@^0.168.0",
-    "three/examples/jsm/controls/OrbitControls.js": "https://esm.sh/three@^0.168.0/examples/jsm/controls/OrbitControls.js",
     "xlsx": "https://esm.sh/xlsx@^0.18.5",
-    "three/": "https://esm.sh/three@^0.177.0/",
-    "marked": "https://esm.sh/marked@^14.0.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.525.0",
     "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
-    "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1"
+    "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1",
+    "docx": "https://esm.sh/docx@^8.5.0",
+    "pptxgenjs": "https://esm.sh/pptxgenjs@^3.12.0",
+    "jspdf": "https://esm.sh/jspdf@^2.5.1",
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@^3.8.2"
   }
 }
 </script>

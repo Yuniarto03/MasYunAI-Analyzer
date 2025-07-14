@@ -1,3 +1,6 @@
+
+
+
 import React from 'react';
 import { 
     IconType, 
@@ -9,7 +12,8 @@ import {
     SidebarSectionConfig, 
     PivotTheme,
     CountryInfo,
-    TravelMode
+    TravelMode,
+    ChartStyle
 } from './types';
 
 
@@ -51,7 +55,7 @@ const CloudIcon: IconType = ({ className }) => ( // Example for online storage
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
     </svg>
 );
-const ProjectIcon: IconType = ({ className }) => ( // Example for projects
+export const ProjectIcon: IconType = ({ className }) => ( // Example for projects
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
     </svg>
@@ -99,9 +103,15 @@ const RouteIcon: IconType = ({ className }) => (
     </svg>
 );
 
-const MapIcon: IconType = ({ className }) => (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m0 0v2.25m0-2.25h3.75m-3.75 0H6.75m0-4.5L12 12m0 0l3.25 3.25M12 12L6.75 8.25M12 12l3.25-3.25m-3.25 3.25L6.75 15m3.25-3.25L12 21l3.25-3.25M12 3v2.25m0 16.5v-2.25M3.75 12h16.5c.621 0 1.125-.504 1.125-1.125V6.75c0-.621-.504-1.125-1.125-1.125H3.75c-.621 0-1.125.504-1.125 1.125v4.5c0 .621.504 1.125 1.125 1.125z" />
+const AutomationIcon: IconType = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+    </svg>
+);
+
+const DocumentIcon: IconType = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
     </svg>
 );
 
@@ -114,18 +124,19 @@ export const CheckCircleIcon: IconType = ({ className }) => (
 
 
 export const DOCK_ITEMS: DockItemConfig[] = [
-  { id: 'welcome', label: 'Welcome', icon: WelcomeIcon },
-  { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-  { id: 'dataUpload', label: 'Upload Data', icon: UploadIcon },
-  { id: 'dataTable', label: 'Data Table', icon: TableIcon },
-  { id: 'visualizations', label: 'Charts', icon: ChartIcon },
-  { id: 'map', label: 'Map View', icon: MapIcon },
-  { id: 'pivotTable', label: 'Pivot Table', icon: PivotIcon },
-  { id: 'aiAssistant', label: 'AI Assistant', icon: AIAssistantIcon },
-  { id: 'settings', label: 'Settings', icon: SettingsIcon },
+  { id: 'welcome', label: 'Welcome', icon: WelcomeIcon, color: '#0ea5e9' }, // sky-500
+  { id: 'dashboard', label: 'Dashboard', icon: HomeIcon, color: '#84cc16' }, // lime-500
+  { id: 'dataUpload', label: 'Upload Data', icon: UploadIcon, color: '#22c55e' }, // green-500
+  { id: 'dataTable', label: 'Data Table', icon: TableIcon, color: '#14b8a6' }, // teal-500
+  { id: 'visualizations', label: 'Charts', icon: ChartIcon, color: '#6366f1' }, // indigo-500
+  { id: 'routePlanner', label: 'Route Planner', icon: RouteIcon, color: '#f97316' }, // orange-500
+  { id: 'pivotTable', label: 'Pivot Table', icon: PivotIcon, color: '#d946ef' }, // fuchsia-500
+  { id: 'aiDocument', label: 'AI Document', icon: DocumentIcon, color: '#f43f5e' }, // rose-500
+  { id: 'workflowAutomation', label: 'Workflow Automator', icon: AutomationIcon, color: '#ec4899' }, // pink-500
+  { id: 'settings', label: 'Settings', icon: SettingsIcon, color: '#8491a0' }, // gray-500
 ];
 
-export const MODEL_TEXT = 'gemini-2.5-flash-preview-04-17';
+export const MODEL_TEXT = 'gemini-2.5-flash';
 export const MODEL_IMAGE = 'imagen-3.0-generate-002';
 
 export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
@@ -141,7 +152,6 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     items: [
         { name: "Data Explorer", icon: TableIcon, viewId: 'dataTable'},
         { name: "Visualizations", icon: ChartIcon, viewId: 'visualizations'},
-        { name: "Map View", icon: MapIcon, viewId: 'map' },
         { name: "Pivot Tables", icon: PivotIcon, viewId: 'pivotTable'},
         { name: "Diagramming Matrix", icon: DiagramIcon, viewId: 'diagrammingMatrix' },
         { name: "Statistical Analysis", icon: StatsIcon, viewId: 'statisticalAnalysis' },
@@ -150,16 +160,14 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
   },
   {
     title: "Recent Projects", 
-    items: [
-      { name: "Sales Analysis Q3", icon: ProjectIcon, viewId: 'projectDetails' },
-      { name: "Marketing Campaign", icon: ProjectIcon, viewId: 'projectDetails' },
-      { name: "Customer Behavior", icon: ProjectIcon, viewId: 'projectDetails' },
-    ]
+    items: []
   },
   {
-    title: "AI Tools",
+    title: "AI & Automation",
     items: [
       { name: "AI Assistant", icon: AIAssistantIcon, viewId: 'aiAssistant' },
+      { name: "AI Document Analysis", icon: DocumentIcon, viewId: 'aiDocument' },
+      { name: "Workflow Automator", icon: AutomationIcon, viewId: 'workflowAutomation' },
       { name: "AI Insight Analyzer", icon: WandIcon, viewId: 'advancedAITools' },
     ]
   }
@@ -192,7 +200,6 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
             { name: "Welcome", viewId: 'welcome' },
             { name: "Dashboard", viewId: 'dashboard' },
             { name: "Data Explorer", viewId: 'dataTable' },
-            { name: "Map View", viewId: 'map'},
             { name: "Pivot Tables", viewId: 'pivotTable' }, // Updated viewId
             { name: "Visualizations", viewId: 'visualizations' },
             { name: "AI Assistant", viewId: 'aiAssistant' } 
@@ -203,7 +210,8 @@ export const NAV_MENU_ITEMS: NavMenuItemConfig[] = [
         subItems: [
             { name: "Data Cleaning", viewId: 'genericPlaceholder' }, 
             { name: "Statistical Analysis", viewId: 'statisticalAnalysis' }, 
-            { name: "Machine Learning", viewId: 'genericPlaceholder' },
+            { name: "AI Document Analysis", viewId: 'aiDocument' },
+            { name: "Workflow Automator", viewId: 'workflowAutomation' },
             { name: "Report Generator", viewId: 'genericPlaceholder' }
         ]
     },
@@ -287,6 +295,81 @@ export const PIVOT_THEMES: Record<string, PivotTheme> = {
   }
 };
 
+// --- CHART STYLES for VisualizationView ---
+export const CHART_STYLES: Record<string, ChartStyle> = {
+  vibrantHolo: {
+    id: 'vibrantHolo',
+    name: 'Vibrant Hologram',
+    description: 'Bright, modern look with subtle glow effects.',
+    colors: ['#2dd4bf', '#a78bfa', '#f87171', '#fbbf24', '#34d399', '#818cf8'],
+    grid: { stroke: '#4b5563', strokeOpacity: 0.3 },
+    tooltip: { backgroundColor: 'rgba(30, 41, 59, 0.7)', borderColor: '#a78bfa', backdropFilter: 'blur(4px)', color: '#e5e7eb' },
+    legend: { color: '#d1d5db' },
+    axis: { color: '#9ca3af' },
+    bar: { className: 'chart-glow-filter', radius: [4, 4, 0, 0] },
+    line: { className: 'chart-glow-filter', strokeWidth: 2.5 },
+    area: { fillOpacity: 0.5, gradient: true, className: 'chart-glow-filter' },
+    pie: { stroke: '#1e293b' },
+  },
+  cyberpunkNight: {
+    id: 'cyberpunkNight',
+    name: 'Cyberpunk Night',
+    description: 'High-contrast neon colors on a dark background.',
+    colors: ['#ff00ff', '#00ffff', '#ffff00', '#00ff00', '#ff5e00', '#7605e2'],
+    grid: { stroke: '#ff00ff', strokeOpacity: 0.2 },
+    tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', borderColor: '#00ffff', backdropFilter: 'blur(2px)', color: '#ffffff' },
+    legend: { color: '#00ffff' },
+    axis: { color: '#ff00ff' },
+    bar: { className: 'chart-strong-glow-filter', radius: [2, 2, 0, 0] },
+    line: { className: 'chart-strong-glow-filter', strokeWidth: 3 },
+    area: { fillOpacity: 0.4, gradient: true, className: 'chart-strong-glow-filter' },
+    pie: { stroke: '#000000', className: 'chart-strong-glow-filter' },
+  },
+  professionalBlue: {
+    id: 'professionalBlue',
+    name: 'Professional Blue',
+    description: 'A clean, corporate-friendly blue-themed palette.',
+    colors: ['#0d47a1', '#1976d2', '#42a5f5', '#90caf9', '#64b5f6', '#e3f2fd'],
+    grid: { stroke: '#cfd8dc', strokeOpacity: 0.5 },
+    tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.9)', borderColor: '#90a4ae', color: '#263238' },
+    legend: { color: '#37474f' },
+    axis: { color: '#546e7a' },
+    bar: { radius: [2, 2, 0, 0] },
+    line: { strokeWidth: 2, dot: { r: 0 }, activeDot: { r: 6 } },
+    area: { fillOpacity: 0.6, gradient: false },
+    pie: { stroke: '#ffffff' },
+  },
+  blueprint: {
+    id: 'blueprint',
+    name: 'Blueprint Sketch',
+    description: 'A technical, schematic-like appearance.',
+    colors: ['#60a5fa', '#93c5fd', '#bfdbfe', '#e0f2fe'],
+    grid: { stroke: '#3b82f6', strokeOpacity: 0.2, strokeDasharray: '4 4' },
+    tooltip: { backgroundColor: 'rgba(17, 24, 39, 0.85)', borderColor: '#3b82f6', color: '#dbeafe' },
+    legend: { color: '#9ca3af' },
+    axis: { color: '#6b7280' },
+    bar: { fillOpacity: 0.6, stroke: '#93c5fd', radius: [0,0,0,0] },
+    line: { strokeWidth: 2, strokeDasharray: '5 5', dot: false },
+    area: { fillOpacity: 0.2, strokeWidth: 2, gradient: true },
+    pie: { stroke: '#0A0F1E', outerRadius: '80%', innerRadius: '30%' },
+  },
+  solarFlare: {
+    id: 'solarFlare',
+    name: 'Solar Flare',
+    description: 'Warm, energetic colors with a fiery glow.',
+    colors: ['#f97316', '#ea580c', '#dc2626', '#facc15', '#f59e0b', '#d97706'],
+    grid: { stroke: '#fde68a', strokeOpacity: 0.2 },
+    tooltip: { backgroundColor: 'rgba(51, 22, 0, 0.8)', borderColor: '#f97316', backdropFilter: 'blur(3px)', color: '#fef3c7' },
+    legend: { color: '#fef3c7' },
+    axis: { color: '#fca5a5' },
+    bar: { className: 'chart-strong-glow-filter', radius: [6, 6, 0, 0] },
+    line: { className: 'chart-strong-glow-filter', strokeWidth: 3 },
+    area: { fillOpacity: 0.6, gradient: true, className: 'chart-strong-glow-filter' },
+    pie: { stroke: '#1c1917', className: 'chart-strong-glow-filter' },
+  },
+};
+
+
 // --- NEW: For FuturisticBackground ---
 export const RAW_COLOR_VALUES: Record<string, string> = {
   'blue-400': '#00D4FF',
@@ -326,18 +409,34 @@ export const HEURISTIC_TRAVEL_FACTORS: Record<TravelMode, number> = {
   CYCLING: 1.3, // Accounts for traffic, roads, elevation
 };
 
-export const CONTINENTS = ['Africa', 'Asia', 'Europe', 'North America', 'Oceania', 'South America'];
+export const CONTINENT_DATA: { name: string; bbox: [number, number, number, number] }[] = [
+    { name: 'World', bbox: [-180, -90, 180, 90] },
+    { name: 'Africa', bbox: [-17.5, -34.8, 51.4, 37.3] },
+    { name: 'Asia', bbox: [25, -10.9, 180, 81.9] },
+    { name: 'Europe', bbox: [-24.5, 34.8, 69.1, 81.9] },
+    { name: 'North America', bbox: [-168.1, 7.2, -52.6, 83.1] },
+    { name: 'South America', bbox: [-81.3, -55.9, -34.8, 12.5] },
+    { name: 'Oceania', bbox: [113.1, -47.3, 179.2, -0.9] }
+];
 
 export const COUNTRIES_DATA: CountryInfo[] = [
-  { "code": "ID", "name": "Indonesia" },
-  { "code": "US", "name": "United States" },
-  { "code": "CA", "name": "Canada" },
-  { "code": "GB", "name": "United Kingdom" },
-  { "code": "AU", "name": "Australia" },
-  { "code": "DE", "name": "Germany" },
-  { "code": "FR", "name": "France" },
-  { "code": "JP", "name": "Japan" },
-  { "code": "IN", "name": "India" },
-  { "code": "BR", "name": "Brazil" },
-  { "code": "CN", "name": "China" },
+  { "code": "ID", "name": "Indonesia", "continent": "Asia", "bbox": [95.0, -11.0, 141.0, 6.0] },
+  { "code": "US", "name": "United States", "continent": "North America", "bbox": [-124.7, 24.4, -66.9, 49.4] },
+  { "code": "CA", "name": "Canada", "continent": "North America", "bbox": [-141.0, 41.7, -52.6, 83.1] },
+  { "code": "GB", "name": "United Kingdom", "continent": "Europe", "bbox": [-8.6, 49.9, 1.8, 60.9] },
+  { "code": "AU", "name": "Australia", "continent": "Oceania", "bbox": [113.1, -43.6, 153.6, -10.7] },
+  { "code": "DE", "name": "Germany", "continent": "Europe", "bbox": [5.9, 47.3, 15.0, 55.1] },
+  { "code": "FR", "name": "France", "continent": "Europe", "bbox": [-5.1, 42.3, 9.6, 51.1] },
+  { "code": "JP", "name": "Japan", "continent": "Asia", "bbox": [122.9, 24.4, 145.8, 45.5] },
+  { "code": "IN", "name": "India", "continent": "Asia", "bbox": [68.1, 6.7, 97.4, 35.5] },
+  { "code": "BR", "name": "Brazil", "continent": "South America", "bbox": [-74.0, -33.8, -34.8, 5.3] },
+  { "code": "CN", "name": "China", "continent": "Asia", "bbox": [73.5, 18.2, 134.8, 53.6] },
+  { "code": "RU", "name": "Russia", "continent": "Europe", "bbox": [19.6, 41.2, 180.0, 81.9] },
+  { "code": "ZA", "name": "South Africa", "continent": "Africa", "bbox": [16.5, -34.8, 32.9, -22.1] },
+  { "code": "AR", "name": "Argentina", "continent": "South America", "bbox": [-73.6, -55.1, -53.6, -21.8] },
+  { "code": "MX", "name": "Mexico", "continent": "North America", "bbox": [-117.1, 14.5, -86.7, 32.7] },
+  { "code": "EG", "name": "Egypt", "continent": "Africa", "bbox": [25.0, 22.0, 36.0, 31.7] },
+  { "code": "IT", "name": "Italy", "continent": "Europe", "bbox": [6.6, 35.5, 18.5, 47.1] },
+  { "code": "ES", "name": "Spain", "continent": "Europe", "bbox": [-9.3, 36.0, 4.3, 43.8] },
+  { "code": "NG", "name": "Nigeria", "continent": "Africa", "bbox": [2.7, 4.3, 14.7, 13.9] },
 ];

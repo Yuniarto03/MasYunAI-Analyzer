@@ -12,11 +12,12 @@ export interface ChatMessage {
   sender: 'user' | 'ai';
   timestamp: Date;
   imageUrl?: string; // To display attached images in chat
-  outputFile?: { // For downloadable AI-generated files
-    filename: string;
-    content: string;
-    mimeType: string;
-  };
+  isDownloadable?: boolean;
+  downloadOptions?: {
+    format: 'docx' | 'xlsx' | 'pptx' | 'pdf' | 'image';
+    label: string;
+  }[];
+  rawContent?: any; // Structured data (e.g., JSON from AI or image bytes)
 }
 
 export interface GroundingChunk {
@@ -61,7 +62,8 @@ export type ViewKey =
   | 'aiAssistant'
   | 'diagrammingMatrix'
   | 'routePlanner'
-  | 'map';
+  | 'workflowAutomation'
+  | 'aiDocument';
 
 export interface NavSubMenuItemConfig {
     name: string;
@@ -178,6 +180,12 @@ export interface PivotReportState {
     uiSettings: PivotTableUISettings;
 }
 
+export interface RecentProject {
+  id: string;
+  name: string;
+  lastAccessed: number;
+}
+
 
 // --- NEW TYPES FOR ADVANCED DATA TABLE ---
 
@@ -226,6 +234,7 @@ export interface DockItemConfig {
   id: ViewKey;
   label: string;
   icon: IconType;
+  color?: string;
 }
 
 export interface SidebarItemConfig {
@@ -364,6 +373,8 @@ export interface BulkRouteResultItem extends Partial<RouteResult> {
 export interface CountryInfo {
   code: string;
   name: string;
+  continent?: string;
+  bbox?: [number, number, number, number];
 }
 
 // --- TYPE FOR RoutePlannerPage.tsx ---
@@ -373,7 +384,7 @@ export interface AppContextType {
 }
 
 // --- DYNAMIC DASHBOARD & VISUALIZATION TYPES ---
-export type WidgetType = 'kpi' | 'bar' | 'line' | 'pie' | 'table' | 'embeddedChart';
+export type WidgetType = 'kpi' | 'bar' | 'line' | 'pie' | 'table' | 'embeddedChart' | 'pivotTableSummary' | 'image' | 'stats';
 
 export interface BaseWidgetConfig {
     id: string;
@@ -384,10 +395,17 @@ export interface BaseWidgetConfig {
     h: number;
 }
 
+export interface KPIFilter {
+    id: string; // For stable rendering in React
+    field: string;
+    value: string;
+}
+
 export interface KPIWidgetConfig extends BaseWidgetConfig {
     type: 'kpi';
     valueField: string | null;
     aggregator: AggregatorType;
+    filters?: KPIFilter[];
 }
 
 export interface ChartWidgetConfig extends BaseWidgetConfig {
@@ -397,19 +415,83 @@ export interface ChartWidgetConfig extends BaseWidgetConfig {
     aggregator: AggregatorType;
 }
 
-export interface TableWidgetConfig extends BaseWidgetConfig {
-    type: 'table';
-    columns: string[];
-    rowCount: number;
-}
-
 export interface EmbeddedChartWidgetConfig extends BaseWidgetConfig {
     type: 'embeddedChart';
     sourceView: 'visualizations' | 'pivotTable' | null;
     sourceId: string | null;
 }
 
-export type DashboardWidget = KPIWidgetConfig | ChartWidgetConfig | TableWidgetConfig | EmbeddedChartWidgetConfig;
+export interface TableWidgetConfig extends BaseWidgetConfig {
+    type: 'table';
+    columns: string[];
+    rowCount: number;
+}
+
+export interface PivotTableSummaryWidgetConfig extends BaseWidgetConfig {
+    type: 'pivotTableSummary';
+    sourceId: string | null; // ID of the PivotReportState
+}
+
+export interface ImageWidgetConfig extends BaseWidgetConfig {
+    type: 'image';
+    src: string | null;
+    fit: 'contain' | 'cover' | 'fill' | 'scale-down';
+}
+
+export interface StatsWidgetConfig extends BaseWidgetConfig {
+    type: 'stats';
+    variables: string[];
+}
+
+
+export type DashboardWidget = 
+  | KPIWidgetConfig 
+  | ChartWidgetConfig 
+  | TableWidgetConfig 
+  | EmbeddedChartWidgetConfig 
+  | PivotTableSummaryWidgetConfig
+  | ImageWidgetConfig
+  | StatsWidgetConfig;
+
+// --- NEW GEOJSON/MAP TYPES ---
+export interface GeoJsonGeometry {
+  type: 'Polygon' | 'MultiPolygon' | 'Point' | 'MultiPoint' | 'LineString' | 'MultiLineString' | 'GeometryCollection';
+  coordinates: any;
+}
+
+export interface GeoJsonFeature {
+  type: 'Feature';
+  geometry: GeoJsonGeometry | null;
+  properties: Record<string, any> | null;
+  id?: string | number;
+}
+
+export interface GeoJsonFeatureCollection {
+  type: 'FeatureCollection';
+  features: GeoJsonFeature[];
+}
+
+export interface MapFeatureStyle {
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+}
+
+// --- Chart Style and State ---
+export interface ChartStyle {
+  id: string;
+  name: string;
+  description: string;
+  colors: string[];
+  grid: { stroke: string; strokeOpacity: number; strokeDasharray?: string; };
+  tooltip: React.CSSProperties;
+  legend: { color: string; };
+  axis: { color: string; };
+  bar?: { className?: string; radius?: [number, number, number, number]; fillOpacity?: number; stroke?: string; };
+  line?: { className?: string; strokeWidth?: number; dot?: boolean | object; activeDot?: object; strokeDasharray?: string; };
+  area?: { className?: string; strokeWidth?: number; fillOpacity?: number; gradient?: boolean; };
+  pie?: { stroke?: string; innerRadius?: string | number; outerRadius?: string | number; label?: boolean; className?: string; };
+}
 
 export interface ChartState {
     chartType: string;
@@ -421,7 +503,7 @@ export interface ChartState {
         stackData: boolean;
         showGrid: boolean;
         legendPosition: string;
-        colorTheme: string;
+        chartStyleId: string;
     };
     referenceLineConfig: {
         enabled: boolean;
@@ -442,7 +524,7 @@ export const initialChartState: ChartState = {
         stackData: false,
         showGrid: true,
         legendPosition: 'bottom',
-        colorTheme: 'cyberpunkNight',
+        chartStyleId: 'vibrantHolo', // Updated from colorTheme to chartStyleId
     },
     referenceLineConfig: {
         enabled: false,
@@ -453,31 +535,67 @@ export const initialChartState: ChartState = {
     }
 };
 
-// --- NEW TYPES FOR GEOJSON MAP VIEW ---
-export interface GeoJsonProperties {
-  [name: string]: any;
+// --- NEW TYPES FOR WORKFLOW AUTOMATION ---
+export type AICommand =
+  | { command: 'NAVIGATE'; view: ViewKey; params?: any }
+  | { command: 'CREATE_PIVOT'; name: string; rows: string[]; columns: string[]; values: { field: string; aggregator: AggregatorType }[] }
+  | { command: 'LOG_MESSAGE'; message: string; type: 'info' | 'success' | 'warning' };
+
+export interface AIAction {
+  step: number;
+  action: AICommand;
+  explanation: string;
 }
 
-export interface GeoJsonGeometry {
-  type: 'Point' | 'MultiPoint' | 'LineString' | 'MultiLineString' | 'Polygon' | 'MultiPolygon' | 'GeometryCollection';
-  coordinates: any[];
-  geometries?: GeoJsonGeometry[];
+export type AIActionPlan = AIAction[];
+
+export interface WorkflowStep {
+  id: number;
+  action: AICommand;
+  explanation: string;
+  status: 'pending' | 'running' | 'success' | 'failed';
+  error?: string;
 }
 
-export interface GeoJsonFeature {
-  type: 'Feature';
-  geometry: GeoJsonGeometry | null;
-  properties: GeoJsonProperties | null;
-  id?: string | number;
+// --- NEW TYPES FOR AI DOCUMENT VIEW ---
+export type AiOutputTypeHint = 'text' | 'msword' | 'pdf' | 'pptx' | 'json' | 'xlsx' | 'png' | 'combined_text_table_image';
+
+export type AiServiceResponseType = 'text' | 'table' | 'image' | 'error' | 'combined';
+
+export interface CombinedAiOutput {
+  textPart?: string;
+  tablePart?: TableRow[];
+  imagePart?: string; // base64
+  imageDescription?: string;
 }
 
-export interface GeoJsonFeatureCollection {
-  type: 'FeatureCollection';
-  features: GeoJsonFeature[];
+export interface AiDocumentResponse {
+    type: AiServiceResponseType;
+    content: string | TableRow[] | CombinedAiOutput;
+    fileName?: string;
+    originalUserHint: AiOutputTypeHint;
 }
 
-export interface MapFeatureStyle {
-  fill?: string;
-  stroke?: string;
-  strokeWidth?: number;
+// For PPTX generation
+export type PptxLayoutType = '16x9' | '4x3';
+
+export interface PptxSlideElement {
+    type: 'text' | 'image' | 'shape';
+    text?: string;
+    options: any; // PptxGenJS options object
+}
+
+export interface PptxSlideData {
+    layout?: PptxLayoutType;
+    elements: PptxSlideElement[];
+    notes?: string;
+}
+
+export interface PptxJsonData {
+    title?: string;
+    author?: string;
+    company?: string;
+    revision?: string;
+    subject?: string;
+    slides: PptxSlideData[];
 }

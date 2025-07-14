@@ -1,5 +1,8 @@
 
 
+
+
+
 import React, { useState, useCallback, useEffect, useContext } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -10,7 +13,7 @@ import { WelcomeView } from './components/views/WelcomeView';
 import { DashboardView } from './components/views/DashboardView';
 import { DataUploadView } from './components/views/DataUploadView';
 import { DataTableView } from './components/views/DataTableView';
-import { VisualizationView } from './components/views/VisualizationView';
+import VisualizationView from './components/views/VisualizationView';
 import { SettingsView } from './components/views/SettingsView';
 import { OnlineConnectorsView } from './components/views/OnlineConnectorsView';
 import { ProjectDetailsView } from './components/views/ProjectDetailsView';
@@ -24,10 +27,11 @@ import { WorkflowView } from './components/views/WorkflowView';
 import { AIAssistantView } from './components/views/AIAssistantView';
 import { DiagrammingMatrixView } from './components/views/DiagrammingMatrixView';
 import { RoutePlannerView } from './components/views/RoutePlannerView';
-import MapView from './components/views/MapView';
+import { WorkflowAutomationView } from './components/views/WorkflowAutomationView';
+import AiDocument from './components/views/AiDocument'; // Import the new view
 import { DOCK_ITEMS, NAV_MENU_ITEMS, SIDEBAR_SECTIONS } from './constants';
-import { IconType, ViewKey, Theme, IconProps } from './types'; 
-import { DataProvider } from './contexts/DataContext';
+import { IconType, ViewKey, Theme, IconProps, RecentProject, PivotReportState } from './types'; 
+import { DataContext, DataProvider } from './contexts/DataContext';
 
 // Polyfill process.env for browser environment and set the API key.
 // In a real production environment, this would be handled by build tools and environment variables.
@@ -35,15 +39,23 @@ if (typeof process === 'undefined') {
   // @ts-ignore
   globalThis.process = { env: {} };
 }
-
-// Set API key from environment variables with fallback
 // @ts-ignore
-if (!process.env.API_KEY && !process.env.VITE_GEMINI_API_KEY) {
-  // @ts-ignore
-  process.env.API_KEY = "AIzaSyCm5LAy0zEhFCRCp6e4c7nGIcyExJLViIc";
-}
+process.env.API_KEY = "AIzaSyCm5LAy0zEhFCRCp6e4c7nGIcyExJLViIc";
 
 const AppContent: React.FC = () => {
+  const { 
+    activePivotId, 
+    setActivePivotId,
+    pivotReports, 
+    setPivotReports,
+    recentProjects, 
+    setRecentProjects,
+    tableData,
+    fileHeaders,
+    setTableData,
+    setFileHeaders,
+  } = useContext(DataContext);
+  
   const [activeView, setActiveView] = useState<ViewKey>('welcome');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -51,9 +63,35 @@ const AppContent: React.FC = () => {
   const [genericFeatureName, setGenericFeatureName] = useState("Selected");
   const [isDockVisible, setIsDockVisible] = useState(true);
 
-  const handleViewChange = useCallback((viewKey: ViewKey) => {
+  const handleViewChange = useCallback((viewKey: ViewKey, context?: any) => {
     setActiveView(viewKey);
-  }, []);
+    if (context?.pivotId) {
+      setActivePivotId(context.pivotId);
+    }
+  }, [setActivePivotId]);
+
+
+  // Effect to update recent projects when activePivotId changes
+  useEffect(() => {
+    if (!activePivotId || !pivotReports.length) return;
+
+    const activeReport = pivotReports.find(r => r.id === activePivotId);
+    if (!activeReport) return;
+
+    setRecentProjects(prev => {
+      const newRecentItem: RecentProject = {
+        id: activeReport.id,
+        name: activeReport.name,
+        lastAccessed: Date.now(),
+      };
+      // Remove existing entry for this report, if any
+      const filtered = prev.filter(p => p.id !== activeReport.id);
+      // Add the new/updated entry to the front and limit to 5
+      const updatedRecents = [newRecentItem, ...filtered].slice(0, 5);
+      return updatedRecents;
+    });
+  }, [activePivotId, pivotReports, setRecentProjects]);
+
 
   const toggleChat = useCallback(() => {
     setIsChatOpen(prev => !prev);
@@ -68,8 +106,7 @@ const AppContent: React.FC = () => {
   }, []);
   
   useEffect(() => {
-    const apiKey = process.env.API_KEY || process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    if (!process.env.API_KEY) {
       console.warn("API_KEY environment variable is not set. AI features may not work.");
     }
     const timer = setTimeout(() => {
@@ -104,8 +141,11 @@ const AppContent: React.FC = () => {
   const mainViews: ViewKey[] = [
     'welcome', 'dashboard', 'dataUpload', 'dataTable', 'visualizations', 'settings',
     'onlineConnectors', 'projectDetails', 'advancedAITools', 'pivotTable', 'about',
-    'statisticalAnalysis', 'workflow', 'aiAssistant', 'diagrammingMatrix', 'routePlanner', 'map'
+    'statisticalAnalysis', 'workflow', 'aiAssistant', 'diagrammingMatrix', 'routePlanner',
+    'workflowAutomation', 'aiDocument'
   ];
+
+  const noPaddingViews: ViewKey[] = ['welcome', 'diagrammingMatrix', 'routePlanner', 'workflowAutomation'];
   
   useEffect(() => {
     if (!mainViews.includes(activeView)) {
@@ -137,7 +177,7 @@ const AppContent: React.FC = () => {
     mediumGray: 'mediumGray',
   };
   
-  const isDiagramOrWelcome = activeView === 'welcome' || activeView === 'diagrammingMatrix';
+  const isDiagramOrWelcome = noPaddingViews.includes(activeView);
   
   return (
     <div className="relative h-screen flex flex-col overflow-hidden">
@@ -153,18 +193,20 @@ const AppContent: React.FC = () => {
           isOpen={isSidebarOpen} 
           onNavigate={handleViewChange}
           activeView={activeView}
+          activePivotId={activePivotId}
+          recentProjects={recentProjects}
         />
         <main 
-          className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-0'} ${isDiagramOrWelcome ? '' : 'p-6'} ${activeView === 'diagrammingMatrix' || activeView === 'routePlanner' || activeView === 'map' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          className={`flex-1 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-0'} ${isDiagramOrWelcome ? '' : 'p-6'} ${activeView === 'diagrammingMatrix' || activeView === 'routePlanner' ? 'overflow-hidden' : 'overflow-y-auto'}`}
         >
           <div style={{ display: activeView === 'welcome' ? 'block' : 'none', height: '100%' }}><WelcomeView onNavigate={handleViewChange} /></div>
           <div style={{ display: activeView === 'dashboard' ? 'block' : 'none' }}><DashboardView /></div>
           <div style={{ display: activeView === 'dataUpload' ? 'block' : 'none' }}><DataUploadView /></div>
           <div style={{ display: activeView === 'dataTable' ? 'block' : 'none' }}><DataTableView onNavigate={handleViewChange} /></div>
           <div style={{ display: activeView === 'visualizations' ? 'block' : 'none' }}><VisualizationView /></div>
-          <div style={{ display: activeView === 'map' ? 'block' : 'none', height: '100%' }}><MapView /></div>
           <div style={{ display: activeView === 'settings' ? 'block' : 'none' }}><SettingsView /></div>
-          <div style={{ display: activeView === 'aiAssistant' ? 'block' : 'none' }}><AIAssistantView /></div>
+          <div style={{ display: activeView === 'aiAssistant' ? 'block' : 'none', height: '100%' }}><AIAssistantView /></div>
+          <div style={{ display: activeView === 'aiDocument' ? 'block' : 'none', height: '100%' }}><AiDocument /></div>
           <div style={{ display: activeView === 'onlineConnectors' ? 'block' : 'none' }}><OnlineConnectorsView /></div>
           <div style={{ display: activeView === 'projectDetails' ? 'block' : 'none' }}><ProjectDetailsView /></div>
           <div style={{ display: activeView === 'advancedAITools' ? 'block' : 'none' }}><AdvancedAIToolsView /></div>
@@ -174,6 +216,17 @@ const AppContent: React.FC = () => {
           <div style={{ display: activeView === 'workflow' ? 'block' : 'none' }}><WorkflowView /></div>
           <div style={{ display: activeView === 'diagrammingMatrix' ? 'flex' : 'none', height: '100%' }}><DiagrammingMatrixView onNavigate={handleViewChange} /></div>
           <div style={{ display: activeView === 'routePlanner' ? 'block' : 'none', height: '100%' }}><RoutePlannerView theme={defaultTheme} reduceMotion={false} /></div>
+          <div style={{ display: activeView === 'workflowAutomation' ? 'block' : 'none', height: '100%' }}>
+            <WorkflowAutomationView 
+              context={{
+                  tableData,
+                  fileHeaders,
+                  setPivotReports: setPivotReports as React.Dispatch<React.SetStateAction<PivotReportState[]>>,
+                  setActivePivotId,
+                  setActiveView: handleViewChange,
+              }}
+            />
+          </div>
           <div style={{ display: isGenericViewActive ? 'block' : 'none' }}><GenericPlaceholderView featureName={genericFeatureName} /></div>
         </main>
       </div>
@@ -194,7 +247,7 @@ const AppContent: React.FC = () => {
         className="fixed bottom-24 right-6 bg-gradient-to-br from-purple-600 to-blue-500 w-14 h-14 rounded-full shadow-lg z-[1001] transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-blue-400 flex items-center justify-center overflow-hidden"
         aria-label="Toggle AI Chat"
       >
-        <MasYunIcon className="w-full h-full object-cover" />
+        <span className="text-3xl" role="img" aria-label="AI Assistant">🤖</span>
       </button>
 
       {isChatOpen && <AIChat onClose={toggleChat} />}
@@ -224,15 +277,3 @@ const EyeSlashIcon: IconType = ({ className }) => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.572M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L6.228 6.228" />
   </svg>
 );
-
-
-const base64Icon = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAH0AfQDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1VWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8MTIxMjJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/aAAwDAQACEQMRAD8A+qKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigA-..';
-const MasYunIcon: React.FC<IconProps> = ({ className }) => (
-  <img src={base64Icon} alt="MasYunAI" className={className} />
-);
-
-// const ChatBotIcon: IconType = ({ className }) => (
-//   <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-//     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.55 19.05 A8 8 0 0110 21 8 8 0 012 13 8 8 0 0110 5 8 8 0 0117.55 10.95 M19 13 A7 7 0 1112 6 V 3 M16 16 S 19 13 21 13 M12 17H12.01 M12 13H12.01 M7 13H7.01" />
-//   </svg>
-// );
