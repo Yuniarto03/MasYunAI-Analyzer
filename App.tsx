@@ -42,7 +42,9 @@ if (typeof process === 'undefined') {
   globalThis.process = { env: {} };
 }
 // @ts-ignore
-process.env.API_KEY = "AIzaSyCm5LAy0zEhFCRCp6e4c7nGIcyExJLViIc";
+process.env.API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "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";
+// @ts-ignore
+process.env.GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "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";
 
 const AppContent: React.FC = () => {
   const { 

@@ -47,16 +47,16 @@ const NavMenuItem: React.FC<NavMenuItemProps> = ({ item, onNavigate }) => {
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >
-      <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white focus:outline-none">
+      <button className="px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:text-white focus:outline-none transition-all duration-300 border border-transparent hover:border-cyan-500/30">
         {item.name}
       </button>
       {isOpen && (
-        <div className="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-gray-800 ring-1 ring-black ring-opacity-5 z-20">
+        <div className="absolute left-0 mt-1 w-48 rounded-md shadow-lg py-1 bg-gray-800/90 backdrop-blur-sm ring-1 ring-cyan-500/30 z-20 border border-cyan-500/20">
           {item.subItems.map(subItem => (
             <button
               key={subItem.name}
               onClick={() => handleSubItemClick(subItem)}
-              className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white"
+              className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gradient-to-r hover:from-cyan-500/20 hover:to-blue-500/20 hover:text-white transition-all duration-200"
             >
               {subItem.name}
             </button>

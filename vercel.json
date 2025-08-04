@@ -4,7 +4,7 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "env": {
-    "VITE_GEMINI_API_KEY": "@gemini-api-key"
+    "VITE_GEMINI_API_KEY": "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"
   },
   "functions": {
     "app/api/**/*.js": {
